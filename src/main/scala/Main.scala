@@ -57,12 +57,14 @@ object RequestActor {
 
   final case class Initialized(target: ActorRef[String]) extends Data
 
-  def apply(id: String):  Behavior[Message] = handle(id, Uninitialized)
-
-  private def handle(id: String, data: Data): Behavior[Message] = Behaviors.setup { context =>
+  def apply(id: String):  Behavior[Message] = Behaviors.setup { context =>
     val key = ServiceKey[Message](id)
     context.system.receptionist ! Receptionist.Register(key, context.self)
 
+    handle(id, Uninitialized)
+  }
+
+  private def handle(id: String, data: Data): Behavior[Message] = Behaviors.setup { context =>
     Behaviors.receiveMessage[Message] { message =>
       (message, data) match {
         case (IdentifyYourself, _) =>
@@ -85,10 +87,11 @@ object RequestActor {
 }
 
 object Main extends JsonSupport {
+  implicit val system: ActorSystem[SpawnProtocol.Command] = ActorSystem(MainActor(), "my-system")
+  implicit val executionContext: ExecutionContext = system.executionContext
+  implicit val timeout: Timeout = 2.seconds
+
   def main(args: Array[String]): Unit = {
-    implicit val system: ActorSystem[SpawnProtocol.Command] = ActorSystem(MainActor(), "my-system")
-    implicit val executionContext: ExecutionContext = system.executionContext
-    implicit val timeout: Timeout = 2.seconds
 
 //    var id = "request-id"
 //    val key = ServiceKey[RequestActor.Message](id)
@@ -113,21 +116,14 @@ object Main extends JsonSupport {
 //      case Failure(ex) => println("An error has occurred: " + ex.getMessage)
 //    }
 
-
     val route =
       path("validations") {
         post {
           entity(as[Validation]) { validation =>
-            val maxWaitTime: FiniteDuration = Duration(2, SECONDS)
-            val actorFuture: Future[ActorRef[RequestActor.Message]] = system.ask(SpawnProtocol.Spawn(RequestActor(validation.id), name = validation.id, props = Props.empty, _))
-            val actor: ActorRef[RequestActor.Message] = Await.result(actorFuture, maxWaitTime)
-            println("actor", actor)
-
-            val resultFuture = actor ? RequestActor.Produce
-            actor ! RequestActor.Reply("amazing")
-            val result: String = Await.result(resultFuture, maxWaitTime)
-
-            complete(StatusCodes.OK, result)
+            onComplete(spawnAndProduce(validation.id)) {
+              case Success(value) => complete(StatusCodes.OK, value)
+              case Failure(ex) => complete(StatusCodes.UnprocessableEntity, ex.getMessage)
+            }
           }
         }
       }
@@ -135,5 +131,16 @@ object Main extends JsonSupport {
     Http().newServerAt("localhost", 8080).bind(route)
 
     println(s"Server now online. Please navigate to http://localhost:8080")
+  }
+
+  private def spawnAndProduce(id: String): Future[String] = {
+    val actorFuture: Future[ActorRef[RequestActor.Message]] = system.ask(SpawnProtocol.Spawn(RequestActor(id), name = id, props = Props.empty, _))
+
+    actorFuture.flatMap { actor =>
+      println("actor", actor)
+      val resultFuture = actor ? RequestActor.Produce
+      actor ! RequestActor.Reply("amazing")
+      resultFuture
+    }
   }
 }
