@@ -3,6 +3,14 @@ package claudiostahl
 import scala.concurrent.duration._
 import scala.concurrent._
 import scala.util._
+import java.util.Properties
+
+import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.producer.ProducerConfig
+import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.serialization.ByteArraySerializer
+
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.Behavior
@@ -22,10 +30,10 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import spray.json._
 
 // domain model
-final case class Validation(id: String)
+final case class Validation(id: String, amount: Int)
 
 trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
-  implicit val validationFormat = jsonFormat1(Validation)
+  implicit val validationFormat = jsonFormat2(Validation)
 }
 
 object MainActor {
@@ -41,7 +49,7 @@ object MainActor {
 object RequestActor {
   sealed trait Message
 
-  final case class Produce(ref: ActorRef[String]) extends Message
+  final case class Wait(ref: ActorRef[String]) extends Message
 
   final case class Reply(value: String) extends Message
 
@@ -57,7 +65,7 @@ object RequestActor {
 
   final case class Initialized(target: ActorRef[String]) extends Data
 
-  def apply(id: String):  Behavior[Message] = Behaviors.setup { context =>
+  def apply(id: String): Behavior[Message] = Behaviors.setup { context =>
     val key = ServiceKey[Message](id)
     context.system.receptionist ! Receptionist.Register(key, context.self)
 
@@ -73,8 +81,8 @@ object RequestActor {
         case (Hello, _) =>
           println("hello back at you")
           Behaviors.unhandled
-        case (Produce(ref), Uninitialized) =>
-          println("Produce", id)
+        case (Wait(ref), Uninitialized) =>
+          println("Wait", id)
           handle(id, Initialized(ref))
         case (Reply(value), Initialized(ref)) =>
           ref ! value
@@ -92,35 +100,31 @@ object Main extends JsonSupport {
   implicit val timeout: Timeout = 2.seconds
 
   def main(args: Array[String]): Unit = {
+    val topic = "validation_input"
 
-//    var id = "request-id"
-//    val key = ServiceKey[RequestActor.Message](id)
-//    val maxWaitTime: FiniteDuration = Duration(2, SECONDS)
-//    val actorFuture: Future[ActorRef[RequestActor.Message]] = system.ask(SpawnProtocol.Spawn(RequestActor(id), name = "request", props = Props.empty, _))
-//    val actor: ActorRef[RequestActor.Message] = Await.result(actorFuture, maxWaitTime)
-//
-//    val receptionistFulture = Receptionist.get(system).ref.ask(Receptionist.Find(key))
-//    receptionistFulture.onComplete {
-//      case Success(listing: Receptionist.Listing) =>
-//        val instances = listing.serviceInstances(key)
-//        val actor2 = instances.iterator.next()
-//        actor2 ! RequestActor.Hello
-//
-//      case Failure(ex) =>
-//        println("An error has occurred: " + ex.getMessage)
-//    }
+    val kafkaProps = new Properties()
+    kafkaProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
+    kafkaProps.put(
+      "key.serializer",
+      "org.apache.kafka.common.serialization.StringSerializer"
+    )
+    kafkaProps.put(
+      "value.serializer",
+      "org.apache.kafka.common.serialization.StringSerializer"
+    )
+    kafkaProps.put("acks", "all")
 
-//    actor ! RequestActor.Hello
-//    actorFuture.onComplete {
-//      case Success(actor) => println(actor.toString)
-//      case Failure(ex) => println("An error has occurred: " + ex.getMessage)
-//    }
+    val producer = new KafkaProducer[String, String](kafkaProps)
 
     val route =
       path("validations") {
         post {
           entity(as[Validation]) { validation =>
-            onComplete(spawnAndProduce(validation.id)) {
+            val message = validationFormat.write(validation).compactPrint
+            var record = new ProducerRecord[String, String](topic, validation.id, message)
+            producer.send(record)
+
+            onComplete(waitReply(validation.id)) {
               case Success(value) => complete(StatusCodes.OK, value)
               case Failure(ex) => complete(StatusCodes.UnprocessableEntity, ex.getMessage)
             }
@@ -128,17 +132,17 @@ object Main extends JsonSupport {
         }
       }
 
-    Http().newServerAt("localhost", 8080).bind(route)
+    Http().newServerAt("localhost", 4000).bind(route)
 
-    println(s"Server now online. Please navigate to http://localhost:8080")
+    println(s"Server now online. Please navigate to http://localhost:4000")
   }
 
-  private def spawnAndProduce(id: String): Future[String] = {
+  private def waitReply(id: String): Future[String] = {
     val actorFuture: Future[ActorRef[RequestActor.Message]] = system.ask(SpawnProtocol.Spawn(RequestActor(id), name = id, props = Props.empty, _))
 
     actorFuture.flatMap { actor =>
       println("actor", actor)
-      val resultFuture = actor ? RequestActor.Produce
+      val resultFuture = actor ? RequestActor.Wait
       actor ! RequestActor.Reply("amazing")
       resultFuture
     }

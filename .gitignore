@@ -1,4 +1,7 @@
 /target/
 /project/project/target/
+/project/target/
 /.bsp/
 /.idea/
+/tmp/
+
