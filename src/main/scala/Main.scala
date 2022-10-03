@@ -4,13 +4,17 @@ import scala.concurrent.duration._
 import scala.concurrent._
 import scala.util._
 import java.util.Properties
-
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.serialization.ByteArraySerializer
-
+import org.apache.kafka.common.serialization.{Serde, Serdes}
+import org.apache.kafka.common.utils.Bytes
+import org.apache.kafka.streams.kstream._
+import org.apache.kafka.streams.state.KeyValueStore
+import org.apache.kafka.streams.{KafkaStreams, KeyValue, StreamsBuilder, StreamsConfig}
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.Behavior
@@ -27,6 +31,7 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
+import claudiostahl.Main.validationFormat
 import spray.json._
 
 // domain model
@@ -94,14 +99,8 @@ object RequestActor {
   }
 }
 
-object Main extends JsonSupport {
-  implicit val system: ActorSystem[SpawnProtocol.Command] = ActorSystem(MainActor(), "my-system")
-  implicit val executionContext: ExecutionContext = system.executionContext
-  implicit val timeout: Timeout = 2.seconds
-
-  def main(args: Array[String]): Unit = {
-    val topic = "validation_input"
-
+object Producer extends JsonSupport {
+  def buildProducer(): KafkaProducer[String, String] = {
     val kafkaProps = new Properties()
     kafkaProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
     kafkaProps.put(
@@ -114,15 +113,60 @@ object Main extends JsonSupport {
     )
     kafkaProps.put("acks", "all")
 
-    val producer = new KafkaProducer[String, String](kafkaProps)
+    new KafkaProducer[String, String](kafkaProps)
+  }
+
+  def produce(producer: KafkaProducer[String, String], topic: String, validation: Validation): Unit = {
+    val message = validationFormat.write(validation).compactPrint
+    var record = new ProducerRecord[String, String](topic, validation.id, message)
+    producer.send(record)
+  }
+}
+
+object Streams {
+  def buildStream(): Unit = {
+    val config: Properties = new Properties
+    config.put(StreamsConfig.APPLICATION_ID_CONFIG, "sandbox_akka")
+    config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "127.0.0.1:9092")
+    config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String.getClass)
+    config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String.getClass)
+
+    // we disable the cache to demonstrate all the "steps" involved in the transformation - not recommended in prod
+    config.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, "0")
+
+    val builder: StreamsBuilder = new StreamsBuilder
+
+    val inputs: KStream[String, String] = builder.stream[String, String]("validation_input")
+    inputs.to("validation_output")
+
+    val streams: KafkaStreams = new KafkaStreams(builder.build(), config)
+    streams.start()
+
+    Runtime.getRuntime.addShutdownHook(new Thread {
+      override def run(): Unit = {
+        streams.close()
+      }
+    })
+  }
+}
+
+object Main extends JsonSupport {
+  implicit val system: ActorSystem[SpawnProtocol.Command] = ActorSystem(MainActor(), "my-system")
+  implicit val executionContext: ExecutionContext = system.executionContext
+  implicit val timeout: Timeout = 2.seconds
+
+  def main(args: Array[String]): Unit = {
+    val topic = "validation_input"
+    val producer = Producer.buildProducer()
+
+    Streams.buildStream()
 
     val route =
       path("validations") {
         post {
           entity(as[Validation]) { validation =>
-            val message = validationFormat.write(validation).compactPrint
-            var record = new ProducerRecord[String, String](topic, validation.id, message)
-            producer.send(record)
+            Producer.produce(producer, topic, validation)
 
             onComplete(waitReply(validation.id)) {
               case Success(value) => complete(StatusCodes.OK, value)
