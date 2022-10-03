@@ -12,8 +12,10 @@ lazy val commonSettings = Seq(
   libraryDependencies += "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
   libraryDependencies += "org.apache.kafka" % "kafka-clients" % "3.3.0",
   libraryDependencies += "org.apache.kafka" % "kafka-streams" % "3.3.0",
-  libraryDependencies += "org.slf4j" % "slf4j-api" % "2.0.3",
-  libraryDependencies += "org.slf4j" % "slf4j-log4j12" % "2.0.3" % Test pomOnly()
+//  libraryDependencies += "org.slf4j" % "slf4j-api" % "2.0.3",
+//  libraryDependencies += "org.slf4j" % "slf4j-simple" % "2.0.3" % Test
+  libraryDependencies += "org.slf4j" %  "slf4j-api" % "1.7.25",
+  libraryDependencies += "org.slf4j" %  "slf4j-log4j12" % "1.7.25"
 )
 
 lazy val root = (project in file("."))
