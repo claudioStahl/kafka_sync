@@ -69,12 +69,18 @@ class JsonSerde[T >: Null <: Any : JsonFormat] extends Serde[T] {
 }
 
 // domain model
+final case class MessageMetadata(host: String)
 final case class ValidationInput(id: String, amount: Int)
+final case class ValidationInputWithMetadata(id: String, amount: Int, metadata: MessageMetadata)
 final case class ValidationResponse(id: String, is_fraud: Boolean)
+final case class ValidationResponseWithMetadata(id: String, is_fraud: Boolean, metadata: MessageMetadata)
 
 trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
+  implicit val messageMetadataFormat = jsonFormat1(MessageMetadata)
   implicit val validationInputFormat = jsonFormat2(ValidationInput)
   implicit val validationResponseFormat = jsonFormat2(ValidationResponse)
+  implicit val validationInputWithMetadataFormat = jsonFormat3(ValidationInputWithMetadata)
+  implicit val validationResponseWithMetadataFormat = jsonFormat3(ValidationResponseWithMetadata)
 }
 
 object MainActor {
@@ -137,23 +143,24 @@ object RequestActor {
 
 object Producer extends JsonSupport {
   def buildProducer(): KafkaProducer[String, String] = {
-    val kafkaProps = new Properties()
-    kafkaProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
-    kafkaProps.put(
+    val config = new Properties()
+    config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
+    config.put(
       "key.serializer",
       "org.apache.kafka.common.serialization.StringSerializer"
     )
-    kafkaProps.put(
+    config.put(
       "value.serializer",
       "org.apache.kafka.common.serialization.StringSerializer"
     )
-    kafkaProps.put("acks", "all")
+    config.put("acks", "all")
 
-    new KafkaProducer[String, String](kafkaProps)
+    new KafkaProducer[String, String](config)
   }
 
-  def produce(producer: KafkaProducer[String, String], topic: String, input: ValidationInput): Unit = {
-    val message = validationInputFormat.write(input).compactPrint
+  def produce(producer: KafkaProducer[String, String], host: String, topic: String, input: ValidationInput): Unit = {
+    val inputWithMetadata = ValidationInputWithMetadata(input.id, input.amount, MessageMetadata(host))
+    val message = validationInputWithMetadataFormat.write(inputWithMetadata).compactPrint
     var record = new ProducerRecord[String, String](topic, input.id, message)
     producer.send(record)
   }
@@ -173,11 +180,11 @@ object ProcessorStream extends JsonSupport {
 
     val builder: StreamsBuilder = new StreamsBuilder
 
-    val inputs: KStream[String, ValidationInput] = builder.stream("validation_input", Consumed.`with`(Serdes.String(), new JsonSerde[ValidationInput]))
+    val inputs: KStream[String, ValidationInputWithMetadata] = builder.stream("validation_input", Consumed.`with`(Serdes.String(), new JsonSerde[ValidationInputWithMetadata]))
 
-    val responses: KStream[String, ValidationResponse] = inputs.mapValues(input => ValidationResponse(input.id, true))
+    val responses: KStream[String, ValidationResponseWithMetadata] = inputs.mapValues(input => ValidationResponseWithMetadata(input.id, true, input.metadata))
 
-    responses.to("validation_output", Produced.`with`(Serdes.String(), new JsonSerde[ValidationResponse]))
+    responses.to("validation_output", Produced.`with`(Serdes.String(), new JsonSerde[ValidationResponseWithMetadata]))
 
     val streams: KafkaStreams = new KafkaStreams(builder.build(), config)
     streams.start()
@@ -235,17 +242,18 @@ object Main extends JsonSupport {
   implicit val timeout: Timeout = 2.seconds
 
   def main(args: Array[String]): Unit = {
+    val host = "node1"
     val topic = "validation_input"
     val producer = Producer.buildProducer()
 
     ProcessorStream.buildStream()
-    ReceiverStream.buildStream()
+//    ReceiverStream.buildStream()
 
     val route =
       path("validations") {
         post {
           entity(as[ValidationInput]) { input =>
-            Producer.produce(producer, topic, input)
+            Producer.produce(producer, host, topic, input)
 
             onComplete(waitReply(input.id)) {
               case Success(value) => complete(StatusCodes.OK, value)
