@@ -5,3 +5,9 @@
 /.idea/
 /tmp/
 
+/.bloop/
+/.metals/
+/.vscode/
+/project/.bloop/
+/project/project/
+/project/metals.sbt

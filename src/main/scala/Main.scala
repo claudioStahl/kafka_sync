@@ -1,24 +1,37 @@
 package claudiostahl
 
+import java.util
 import java.time.Duration
 import java.time.temporal.ChronoUnit
+import collection.JavaConverters._
 import scala.concurrent.duration._
 import scala.concurrent._
 import scala.util._
 import java.util.Properties
+import org.apache.kafka.streams.processor.{RecordContext, TopicNameExtractor}
+import org.apache.kafka.clients.admin.{Admin, NewTopic}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.serialization.ByteArraySerializer
-import org.apache.kafka.common.serialization.{Deserializer, Serde, Serdes, Serializer}
+import org.apache.kafka.common.serialization.{Deserializer, Serde => JSerde, Serdes => JSerdes, Serializer}
 import org.apache.kafka.common.utils.Bytes
-import org.apache.kafka.streams.kstream._
-import org.apache.kafka.streams.state.KeyValueStore
-import org.apache.kafka.streams.{KafkaStreams, KeyValue, StreamsBuilder, StreamsConfig}
-import org.apache.kafka.streams.kstream.Consumed
-import org.apache.kafka.streams.kstream.Produced
+import org.apache.kafka.common.serialization.Serde
+import org.apache.kafka.streams.StreamsConfig
+import org.apache.kafka.streams.scala.ImplicitConversions._
+import org.apache.kafka.streams.scala._
+import org.apache.kafka.streams.scala.kstream._
+import org.apache.kafka.streams.scala.serialization.Serdes
+import org.apache.kafka.streams.KafkaStreams
+//import org.apache.kafka.streams.kstream._
+//import org.apache.kafka.streams.state.KeyValueStore
+//import org.apache.kafka.streams.{KafkaStreams, KeyValue, StreamsBuilder, StreamsConfig}
+//import org.apache.kafka.streams.kstream.Consumed
+//import org.apache.kafka.streams.kstream.Produced
+//import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor
+//import org.apache.kafka.streams.kstream.Materialized
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.Behavior
@@ -58,7 +71,7 @@ class JsonDeserializer[T >: Null <: Any : JsonFormat] extends Deserializer[T] {
   }
 }
 
-class JsonSerde[T >: Null <: Any : JsonFormat] extends Serde[T] {
+class JsonSerde[T >: Null <: Any : JsonFormat] extends JSerde[T] {
   override def deserializer(): Deserializer[T] = new JsonDeserializer[T]
 
   override def serializer(): Serializer[T] = new JsonSerializer[T]
@@ -74,6 +87,8 @@ final case class ValidationInput(id: String, amount: Int)
 final case class ValidationInputWithMetadata(id: String, amount: Int, metadata: MessageMetadata)
 final case class ValidationResponse(id: String, is_fraud: Boolean)
 final case class ValidationResponseWithMetadata(id: String, is_fraud: Boolean, metadata: MessageMetadata)
+final case class PoolControlInput(host: String)
+final case class PoolControlOutput(host: String, index: Int)
 
 trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
   implicit val messageMetadataFormat = jsonFormat1(MessageMetadata)
@@ -81,6 +96,8 @@ trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
   implicit val validationResponseFormat = jsonFormat2(ValidationResponse)
   implicit val validationInputWithMetadataFormat = jsonFormat3(ValidationInputWithMetadata)
   implicit val validationResponseWithMetadataFormat = jsonFormat3(ValidationResponseWithMetadata)
+  implicit val poolControlInputFormat = jsonFormat1(PoolControlInput)
+  implicit val poolControlOutputFormat = jsonFormat2(PoolControlOutput)
 }
 
 object MainActor {
@@ -164,29 +181,111 @@ object Producer extends JsonSupport {
     var record = new ProducerRecord[String, String](topic, input.id, message)
     producer.send(record)
   }
+
+  def requestPoolControl(producer: KafkaProducer[String, String], host: String): Unit = {
+//    val input = PoolControlInput(host)
+//    val message = poolControlInputFormat.write(input).compactPrint
+    var record = new ProducerRecord[String, String]("sandbox_akka_pool_control_input", host, "request")
+    producer.send(record)
+  }
 }
 
-object ProcessorStream extends JsonSupport {
-  def buildStream(): Unit = {
+//object ProcessorStream extends JsonSupport {
+//  def buildStream(host: String): Unit = {
+//    val config: Properties = new Properties
+//    config.put(StreamsConfig.APPLICATION_ID_CONFIG, "sandbox_akka_processor")
+//    config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
+//    config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+//    config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String.getClass)
+//    config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String.getClass)
+//
+//    // we disable the cache to demonstrate all the "steps" involved in the transformation - not recommended in prod
+////    config.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, "0")
+//
+//    val builder: StreamsBuilder = new StreamsBuilder
+//
+//    val inputs: KStream[String, ValidationInputWithMetadata] = builder.stream("validation_input", Consumed.`with`(Serdes.String(), new JsonSerde[ValidationInputWithMetadata]))
+//
+//    val processedInputs: KStream[String, ValidationResponseWithMetadata] = inputs.mapValues(input => ValidationResponseWithMetadata(input.id, true, input.metadata))
+//
+//    processedInputs.to("validation_output", Produced.`with`(Serdes.String(), new JsonSerde[ValidationResponseWithMetadata]))
+//
+//    val topology = builder.build()
+//
+//    println("topology", topology.describe())
+//
+//    val streams: KafkaStreams = new KafkaStreams(topology, config)
+//    streams.start()
+//
+//    Runtime.getRuntime.addShutdownHook(new Thread {
+//      override def run(): Unit = {
+//        streams.close()
+//      }
+//    })
+//  }
+//}
+
+object ReceiverStream extends JsonSupport {
+  import Serdes._
+
+  def buildStream(host: String): Unit = {
     val config: Properties = new Properties
-    config.put(StreamsConfig.APPLICATION_ID_CONFIG, "sandbox_akka_processor")
-    config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "127.0.0.1:9092")
+    config.put(StreamsConfig.APPLICATION_ID_CONFIG, "sandbox_akka_receiver")
+    config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
     config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String.getClass)
-    config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String.getClass)
+    config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, JSerdes.String.getClass)
+    config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, JSerdes.String.getClass)
+    config.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 1)
 
     // we disable the cache to demonstrate all the "steps" involved in the transformation - not recommended in prod
     config.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, "0")
 
     val builder: StreamsBuilder = new StreamsBuilder
 
-    val inputs: KStream[String, ValidationInputWithMetadata] = builder.stream("validation_input", Consumed.`with`(Serdes.String(), new JsonSerde[ValidationInputWithMetadata]))
+//    implicit val matererlized: Materialized[String, Long, ByteArrayKeyValueStore]
+//      = Materialized.as("aggregated-stream-store")
 
-    val responses: KStream[String, ValidationResponseWithMetadata] = inputs.mapValues(input => ValidationResponseWithMetadata(input.id, true, input.metadata))
+    val controlInputs: KStream[String, String] = builder.stream[String, String]("sandbox_akka_pool_control_input")
 
-    responses.to("validation_output", Produced.`with`(Serdes.String(), new JsonSerde[ValidationResponseWithMetadata]))
+    val controlRequests = controlInputs
+      .groupBy((k, v) => v)
+      .aggregate[Int](0)((_, _, acc) => acc + 1)
+//    (matererlized)
 
-    val streams: KafkaStreams = new KafkaStreams(builder.build(), config)
+    controlRequests.toStream.to("sandbox_akka_pool_control_index")
+
+    val indexes: KStream[String, Int] = builder.stream[String, Int]("sandbox_akka_pool_control_index")
+
+    indexes.peek((k, v) => println("peek", v))
+
+//    , Materialized.`with`(Serde[String], Serde[Int]
+//
+//    controlRequests.toStream.to("sandbox_akka_pool_control_index", Produced.`with`(Serde[String], Serde[Int]))
+    //, Produced.`with`(Serdes.String(), Serdes.Integer())
+
+    // controlRequests.toStream()
+
+//    controlRequests.
+
+//    val outputs: KStream[String, ValidationResponseWithMetadata] = builder.stream("validation_output", Consumed.`with`(Serdes.String(), new JsonSerde[ValidationResponseWithMetadata]))
+//
+//    outputs.to(
+//      //      (key: String, value: ValidationResponseWithMetadata, recordContext: RecordContext) => "sandbox_akka_responses_" + value.metadata.host,
+//      //      (key: String, value: ValidationResponseWithMetadata, recordContext: RecordContext) => "sandbox_akka_responses_node1",
+//      "sandbox_akka_responses_node1",
+//      Produced.`with`(Serdes.String(), new JsonSerde[ValidationResponseWithMetadata]).withName("sink_responses")
+//    )
+//
+//    val responses: KStream[String, String] = builder.stream[String, String]("sandbox_akka_responses_" + host)
+//    responses.peek { (k, v) => println(v) }
+
+    val topology = builder.build()
+
+//    topology.addSink("private_node_topic", (key: String, value: ValidationResponseWithMetadata, recordContext: RecordContext) => "sandbox_akka_responses_" + value.metadata.host, "sink_responses")
+
+//    println("topology", topology.describe())
+//
+    val streams: KafkaStreams = new KafkaStreams(topology, config)
     streams.start()
 
     Runtime.getRuntime.addShutdownHook(new Thread {
@@ -197,42 +296,15 @@ object ProcessorStream extends JsonSupport {
   }
 }
 
-
-object ReceiverStream {
-  def buildStream(): Unit = {
+object TopicCreator {
+  def createPrivateTopic(host: String): Unit = {
     val config: Properties = new Properties
-    config.put(StreamsConfig.APPLICATION_ID_CONFIG, "sandbox_akka_receiver")
-    config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "127.0.0.1:9092")
-    config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String.getClass)
-    config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String.getClass)
-    config.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 1)
+    config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
 
-    // we disable the cache to demonstrate all the "steps" involved in the transformation - not recommended in prod
-    config.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, "0")
+    val newTopic = new NewTopic("sandbox_akka_responses_" + host, 1, 1.toShort)
 
-    val builder: StreamsBuilder = new StreamsBuilder
-
-    val inputs: KStream[String, String] = builder.stream[String, String]("validation_input")
-    val outputs: KStream[String, String] = builder.stream[String, String]("validation_output")
-
-    val joiner: ValueJoiner[String, String, String] = { (input, output) =>
-      output
-    }
-    val joinWindow = JoinWindows.of(Duration.ofSeconds(5L))
-
-    val joined = inputs.join(outputs, joiner, joinWindow).peek { (k, v) => println(v) }
-
-//    joined.to("validation_join")
-
-    val streams: KafkaStreams = new KafkaStreams(builder.build(), config)
-    streams.start()
-
-    Runtime.getRuntime.addShutdownHook(new Thread {
-      override def run(): Unit = {
-        streams.close()
-      }
-    })
+    val client = Admin.create(config)
+    client.createTopics(List(newTopic).asJavaCollection).values()
   }
 }
 
@@ -246,8 +318,12 @@ object Main extends JsonSupport {
     val topic = "validation_input"
     val producer = Producer.buildProducer()
 
-    ProcessorStream.buildStream()
-//    ReceiverStream.buildStream()
+    TopicCreator.createPrivateTopic(host)
+
+//    ProcessorStream.buildStream(host)
+    ReceiverStream.buildStream(host)
+
+    Producer.requestPoolControl(producer, host)
 
     val route =
       path("validations") {
