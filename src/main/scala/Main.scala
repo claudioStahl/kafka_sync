@@ -39,8 +39,10 @@ object Main extends JsonSupport {
     val topic = "validation_input"
     val producer = Producer.buildProducer()
 
+    PoolControlStream.buildStream(host)
     ReceiverStream.buildStream(host)
     ProcessorStream.buildStream()
+
     Producer.requestPoolControl(producer, host)
 
     val route =
