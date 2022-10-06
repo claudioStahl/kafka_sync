@@ -67,9 +67,11 @@ object PoolControlStream extends JsonSupport {
         while (view.get(host) == null) {
           Thread.sleep(100);
         }
+
         val poolControlInput: PoolControlIndex = view.get(host)
         PoolControl.index = poolControlInput.index
         println("index=", poolControlInput)
+        Consumer.launchConsumer(host, poolControlInput.index)
       }
     }
 

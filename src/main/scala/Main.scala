@@ -70,7 +70,7 @@ object Main extends JsonSupport {
     actorFuture.flatMap { actor =>
       println("actor", actor)
       val resultFuture = actor ? RequestActor.Wait
-      actor ! RequestActor.Reply("amazing")
+//      actor ! RequestActor.Reply("amazing")
       resultFuture
     }
   }
