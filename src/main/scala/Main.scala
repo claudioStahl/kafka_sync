@@ -52,7 +52,9 @@ object Main extends JsonSupport {
   implicit val timeout: Timeout = 2.seconds
 
   def main(args: Array[String]): Unit = {
-    val host = "node1"
+    val rand = new scala.util.Random
+
+    val host = "node" + rand.nextInt().toString
     val topic = "validation_input"
     val producer = Producer.buildProducer()
 

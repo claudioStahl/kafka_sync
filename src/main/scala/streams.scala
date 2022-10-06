@@ -87,7 +87,17 @@ object ReceiverStream extends JsonSupport {
     streams.start()
 
     val view: ReadOnlyKeyValueStore[String, PoolControlIndex] = streams.store(StoreQueryParameters.fromNameAndType(globalIndexes.queryableStoreName(), QueryableStoreTypes.keyValueStore[String, PoolControlIndex]()))
-    println("index=", view.get(host))
+
+    val thread = new Thread {
+      override def run {
+        while (view.get(host) == null) {
+          Thread.sleep(100);
+        }
+        println("last_index=", view.get(host))
+      }
+    }
+
+    thread.start
 
 //    val values = view.all()
 //    while (values.hasNext) {
