@@ -23,7 +23,7 @@ object Producer extends JsonSupport {
   }
 
   def produce(producer: KafkaProducer[String, String], host: String, topic: String, input: ValidationInput): Unit = {
-    val inputWithMetadata = ValidationInputWithMetadata(input.id, input.amount, MessageMetadata(host))
+    val inputWithMetadata = ValidationInputWithMetadata(input.id, input.amount, MessageMetadata(host, PoolControl.index))
     val message = validationInputWithMetadataFormat.write(inputWithMetadata).compactPrint
     var record = new ProducerRecord[String, String](topic, input.id, message)
     producer.send(record)

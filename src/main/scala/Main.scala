@@ -8,25 +8,6 @@ import scala.concurrent.duration._
 import scala.concurrent._
 import scala.util._
 import java.util.Properties
-//import org.apache.kafka.clients.admin.{Admin, NewTopic}
-//import org.apache.kafka.clients.CommonClientConfigs
-//import org.apache.kafka.clients.producer.KafkaProducer
-//import org.apache.kafka.clients.producer.ProducerConfig
-//import org.apache.kafka.clients.producer.ProducerRecord
-//import org.apache.kafka.clients.consumer.ConsumerConfig
-//import org.apache.kafka.common.serialization.ByteArraySerializer
-//import org.apache.kafka.common.serialization.{Deserializer, Serde => JSerde, Serdes => JSerdes, Serializer}
-//import org.apache.kafka.common.utils.Bytes
-//import org.apache.kafka.common.serialization.Serde
-//import org.apache.kafka.streams.processor.{RecordContext, TopicNameExtractor}
-//import org.apache.kafka.streams.StreamsConfig
-//import org.apache.kafka.streams.scala.ImplicitConversions._
-//import org.apache.kafka.streams.scala._
-//import org.apache.kafka.streams.scala.kstream._
-//import org.apache.kafka.streams.scala.serialization.Serdes
-//import org.apache.kafka.streams.KafkaStreams
-//import org.apache.kafka.streams.kstream.GlobalKTable
-//import org.apache.kafka.streams.KeyValue
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.Behavior
@@ -58,8 +39,8 @@ object Main extends JsonSupport {
     val topic = "validation_input"
     val producer = Producer.buildProducer()
 
-    //    ProcessorStream.buildStream(host)
     ReceiverStream.buildStream(host)
+    ProcessorStream.buildStream()
     Producer.requestPoolControl(producer, host)
 
     val route =
