@@ -13,6 +13,7 @@ lazy val commonSettings = Seq(
   libraryDependencies += "org.apache.kafka" % "kafka-clients" % "3.3.0",
   libraryDependencies += "org.apache.kafka" % "kafka-streams" % "3.3.0",
   libraryDependencies += "org.apache.kafka" %% "kafka-streams-scala" % "3.3.0",
+  libraryDependencies += "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.13.4",
     //  libraryDependencies += "org.slf4j" % "slf4j-api" % "2.0.3",
 //  libraryDependencies += "org.slf4j" % "slf4j-simple" % "2.0.3" % Test
   libraryDependencies += "org.slf4j" %  "slf4j-api" % "1.7.25",
