@@ -17,7 +17,7 @@ object Producer extends JsonSupport {
       "value.serializer",
       "org.apache.kafka.common.serialization.StringSerializer"
     )
-    config.put("acks", "all")
+    config.put("acks", "0")
 
     val producer = new KafkaProducer[String, String](config)
 

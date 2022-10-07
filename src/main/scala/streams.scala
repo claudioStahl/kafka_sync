@@ -13,6 +13,7 @@ import org.apache.kafka.streams.kstream.GlobalKTable
 import org.apache.kafka.streams.state.{QueryableStoreTypes, ReadOnlyKeyValueStore}
 import org.apache.kafka.streams.StoreQueryParameters
 import org.apache.kafka.streams.scala.kstream.BranchedKStream
+import org.apache.kafka.clients.producer.ProducerConfig
 
 object PoolControlStream extends JsonSupport {
   import Serdes._
@@ -21,7 +22,7 @@ object PoolControlStream extends JsonSupport {
     val poolSize = 3
 
     val config: Properties = new Properties
-    config.put(StreamsConfig.APPLICATION_ID_CONFIG, "sandbox_akka_poolcontrol_v4")
+    config.put(StreamsConfig.APPLICATION_ID_CONFIG, "sandbox_akka_poolcontrol_v" + Main.version.toString)
     config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
     config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, JSerdes.String.getClass)
@@ -34,8 +35,8 @@ object PoolControlStream extends JsonSupport {
     implicit val PoolControlInput = new JSONSerde[PoolControlInput]
     implicit val poolControlIndexSerde = new JSONSerde[PoolControlIndex]
     implicit val validationResponseWithMetadata = new JSONSerde[ValidationResponseWithMetadata]
-    implicit val matererlized: Materialized[String, PoolControlIndex, ByteArrayKeyValueStore] = Materialized.as("aggregated-stream-store")
-    val globalIndexMatererlized: Materialized[String, PoolControlIndex, ByteArrayKeyValueStore] = Materialized.as("global-index")
+    implicit val matererlized: Materialized[String, PoolControlIndex, ByteArrayKeyValueStore] = Materialized.as("aggregated_stream_store_v" + Main.version.toString)
+    val globalIndexMatererlized: Materialized[String, PoolControlIndex, ByteArrayKeyValueStore] = Materialized.as("global_index_v" + Main.version.toString)
 
     val builder: StreamsBuilder = new StreamsBuilder
 
@@ -90,15 +91,16 @@ object ReceiverStream extends JsonSupport {
     val poolSize = 3
 
     val config: Properties = new Properties
-    config.put(StreamsConfig.APPLICATION_ID_CONFIG, "sandbox_akka_receiver_v4")
+    config.put(StreamsConfig.APPLICATION_ID_CONFIG, "sandbox_akka_receiver_v" + Main.version.toString)
     config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
     config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
     config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, JSerdes.String.getClass)
     config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, JSerdes.String.getClass)
     config.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 1)
+    config.put(ProducerConfig.LINGER_MS_CONFIG, 0)
 
     // we disable the cache to demonstrate all the "steps" involved in the transformation - not recommended in prod
-    // config.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, "0")
+     config.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, "0")
 
     implicit val validationResponseWithMetadata = new JSONSerde[ValidationResponseWithMetadata]
 
@@ -109,8 +111,13 @@ object ReceiverStream extends JsonSupport {
 
     (1 to poolSize).foreach { i =>
       outputsBranched.branch(
-        (k: String, v: ValidationResponseWithMetadata) => v.metadata.poolIndex == i,
-        Branched.withConsumer(ks => ks.to("sandbox_akka_responses_p" + i.toString))
+        (k: String, v: ValidationResponseWithMetadata) => {
+          println("[time]", "[ReceiverStream.branch]", System.currentTimeMillis())
+          v.metadata.poolIndex == i
+        },
+        Branched.withConsumer(ks => {
+          ks.to("sandbox_akka_responses_p" + i.toString)
+        })
       )
     }
 
@@ -135,11 +142,12 @@ object ProcessorStream extends JsonSupport {
 
   def buildStream(): Unit = {
     val config: Properties = new Properties
-    config.put(StreamsConfig.APPLICATION_ID_CONFIG, "sandbox_akka_processor_v4")
+    config.put(StreamsConfig.APPLICATION_ID_CONFIG, "sandbox_akka_processor_v" + Main.version.toString)
     config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
     config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, JSerdes.String.getClass)
     config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, JSerdes.String.getClass)
+    config.put(ProducerConfig.LINGER_MS_CONFIG, 0)
 
     // we disable the cache to demonstrate all the "steps" involved in the transformation - not recommended in prod
     // config.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, "0")
@@ -151,7 +159,10 @@ object ProcessorStream extends JsonSupport {
 
     val inputs: KStream[String, ValidationInputWithMetadata] = builder.stream[String, ValidationInputWithMetadata]("validation_input")
 
-    val processedInputs: KStream[String, ValidationResponseWithMetadata] = inputs.mapValues(input => ValidationResponseWithMetadata(input.id, true, input.metadata))
+    val processedInputs: KStream[String, ValidationResponseWithMetadata] = inputs.mapValues(input => {
+      println("[time]", "[ProcessorStream.mapValues]", System.currentTimeMillis())
+      ValidationResponseWithMetadata(input.id, true, input.metadata)
+    })
 
     processedInputs.to("validation_output")
 

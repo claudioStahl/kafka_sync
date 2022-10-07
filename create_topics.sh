@@ -4,3 +4,4 @@ for topic in validation_input validation_output sandbox_akka_pool_control_input 
 do
   docker exec -it global_kafka bash -c "/usr/bin/kafka-topics --create --partitions 1 --replication-factor 1 --zookeeper zookeeper:2181 --topic ${topic}"
 done
+

@@ -1,7 +1,6 @@
 package claudiostahl
 
 import java.util
-import java.time.Duration
 import java.time.temporal.ChronoUnit
 import collection.JavaConverters._
 import scala.concurrent.duration._
@@ -28,6 +27,7 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import spray.json._
 
 object Main extends JsonSupport {
+  val version = 5
   implicit val system: ActorSystem[SpawnProtocol.Command] = ActorSystem(MainActor(), "my-system")
   implicit val executionContext: ExecutionContext = system.executionContext
   implicit val timeout: Timeout = 2.seconds
@@ -45,15 +45,23 @@ object Main extends JsonSupport {
 
     Producer.requestPoolControl(producer, host)
 
+//    val maxWaitTime: FiniteDuration = Duration(2, SECONDS)
+//    val actorFuture: Future[ActorRef[RequestActor.Message]] = system.ask(SpawnProtocol.Spawn(RequestActor("1"), name = "1", props = Props.empty, _))
+//    val actor = Await.result(actorFuture, maxWaitTime)
+
     val route =
       path("validations") {
         post {
           entity(as[ValidationInput]) { input =>
             if (PoolControl.index != -1) {
+              println("[time]", "[start]", System.currentTimeMillis())
               Producer.produce(producer, host, topic, input)
 
               onComplete(waitReply(input.id)) {
-                case Success(value) => complete(StatusCodes.OK, value)
+                case Success(value) => {
+                  println("[time]", "[finish]", System.currentTimeMillis())
+                  complete(StatusCodes.OK, value)
+                }
                 case Failure(ex) => complete(StatusCodes.UnprocessableEntity, ex.getMessage)
               }
             } else {
@@ -72,9 +80,9 @@ object Main extends JsonSupport {
     val actorFuture: Future[ActorRef[RequestActor.Message]] = system.ask(SpawnProtocol.Spawn(RequestActor(id), name = id, props = Props.empty, _))
 
     actorFuture.flatMap { actor =>
-//      println("actor", actor)
+      println("[time]", "[spawn_actor]", System.currentTimeMillis())
       val resultFuture = actor ? RequestActor.Wait
-//      actor ! RequestActor.Reply("amazing")
+
       resultFuture
     }
   }

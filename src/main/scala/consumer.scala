@@ -39,8 +39,9 @@ object Consumer {
     val thread = new Thread {
       override def run {
         while (true) {
-          val records = consumer.poll(Duration.ofMillis(100L))
+          val records = consumer.poll(Duration.ofMillis(5L))
           records.iterator().forEachRemaining { record: ConsumerRecord[String, String] =>
+            println("[time]", "[consume_record]", System.currentTimeMillis())
             val key = ServiceKey[RequestActor.Message](record.key)
             val receptionistFulture = Receptionist.get(system).ref.ask(Receptionist.Find(key))
 
@@ -48,6 +49,7 @@ object Consumer {
               case Success(listing: Receptionist.Listing) =>
                 val instances = listing.serviceInstances(key)
                 val actor = instances.iterator.next()
+                println("[time]", "[found_actor]", System.currentTimeMillis())
                 actor ! RequestActor.Reply(record.value)
 
               case Failure(ex) =>
