@@ -54,9 +54,9 @@ object Consumer {
                 println("An error has occurred: " + ex.getMessage)
             }
 
-            println(
-              s"""offset=${record.offset}, partition=${record.partition}, key=${record.key}, value=${record.value}, schema=${record.value}""".stripMargin
-            )
+//            println(
+//              s"""offset=${record.offset}, partition=${record.partition}, key=${record.key}, value=${record.value}, schema=${record.value}""".stripMargin
+//            )
           }
         }
       }

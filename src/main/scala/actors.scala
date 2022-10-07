@@ -50,7 +50,7 @@ object RequestActor {
           println("hello back at you")
           Behaviors.unhandled
         case (Wait(ref), Uninitialized) =>
-          println("Wait", id)
+//          println("Wait", id)
           handle(id, Initialized(ref))
         case (Reply(value), Initialized(ref)) =>
           ref ! value

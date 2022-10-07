@@ -40,7 +40,6 @@ object PoolControlStream extends JsonSupport {
     val builder: StreamsBuilder = new StreamsBuilder
 
     val controlInputs: KStream[String, PoolControlInput] = builder.stream[String, PoolControlInput]("sandbox_akka_pool_control_input")
-    controlInputs.peek((k, v) => println("peek", k, v))
 
     val controlRequests = controlInputs
       .groupByKey
@@ -53,10 +52,9 @@ object PoolControlStream extends JsonSupport {
     controlRequests.toStream.map((k, v) => (v.host, v)).to("sandbox_akka_pool_control_index")
 
     val globalIndexes: GlobalKTable[String, PoolControlIndex] = builder.globalTable[String, PoolControlIndex]("sandbox_akka_pool_control_index", globalIndexMatererlized)
-    println("queryableStoreName=", globalIndexes.queryableStoreName())
 
     val topology = builder.build()
-    println("topology", topology.describe())
+    println("PoolControlStream.topology", topology.describe())
     val streams: KafkaStreams = new KafkaStreams(topology, config)
     streams.start()
 
@@ -118,7 +116,7 @@ object ReceiverStream extends JsonSupport {
 
     val topology = builder.build()
 
-    println("topology", topology.describe())
+    println("ReceiverStream.topology", topology.describe())
 
     val streams: KafkaStreams = new KafkaStreams(topology, config)
 
@@ -159,7 +157,7 @@ object ProcessorStream extends JsonSupport {
 
     val topology = builder.build()
 
-    println("topology", topology.describe())
+    println("ProcessorStream.topology", topology.describe())
 
     val streams: KafkaStreams = new KafkaStreams(topology, config)
     streams.start()

@@ -72,7 +72,7 @@ object Main extends JsonSupport {
     val actorFuture: Future[ActorRef[RequestActor.Message]] = system.ask(SpawnProtocol.Spawn(RequestActor(id), name = id, props = Props.empty, _))
 
     actorFuture.flatMap { actor =>
-      println("actor", actor)
+//      println("actor", actor)
       val resultFuture = actor ? RequestActor.Wait
 //      actor ! RequestActor.Reply("amazing")
       resultFuture
