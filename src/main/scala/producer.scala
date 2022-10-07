@@ -19,7 +19,15 @@ object Producer extends JsonSupport {
     )
     config.put("acks", "all")
 
-    new KafkaProducer[String, String](config)
+    val producer = new KafkaProducer[String, String](config)
+
+    Runtime.getRuntime.addShutdownHook(new Thread {
+      override def run(): Unit = {
+        producer.close()
+      }
+    })
+
+    producer
   }
 
   def produce(producer: KafkaProducer[String, String], host: String, topic: String, input: ValidationInput): Unit = {

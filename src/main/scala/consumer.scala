@@ -30,6 +30,12 @@ object Consumer {
     val consumer = new KafkaConsumer[String, String](props)
     consumer.subscribe(Collections.singletonList(topic))
 
+    Runtime.getRuntime.addShutdownHook(new Thread {
+      override def run(): Unit = {
+        consumer.close()
+      }
+    })
+
     val thread = new Thread {
       override def run {
         while (true) {

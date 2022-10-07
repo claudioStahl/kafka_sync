@@ -49,11 +49,15 @@ object Main extends JsonSupport {
       path("validations") {
         post {
           entity(as[ValidationInput]) { input =>
-            Producer.produce(producer, host, topic, input)
+            if (PoolControl.index != -1) {
+              Producer.produce(producer, host, topic, input)
 
-            onComplete(waitReply(input.id)) {
-              case Success(value) => complete(StatusCodes.OK, value)
-              case Failure(ex) => complete(StatusCodes.UnprocessableEntity, ex.getMessage)
+              onComplete(waitReply(input.id)) {
+                case Success(value) => complete(StatusCodes.OK, value)
+                case Failure(ex) => complete(StatusCodes.UnprocessableEntity, ex.getMessage)
+              }
+            } else {
+              complete(StatusCodes.UnprocessableEntity, "not_ready")
             }
           }
         }
