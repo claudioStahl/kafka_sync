@@ -31,16 +31,10 @@ object Producer extends JsonSupport {
   }
 
   def produce(producer: KafkaProducer[String, String], host: String, topic: String, input: ValidationInput): Unit = {
-    val inputWithMetadata = ValidationInputWithMetadata(input.id, input.amount, MessageMetadata(host, PoolControl.index))
+    val index = PoolControl.atomicIndex.get()
+    val inputWithMetadata = ValidationInputWithMetadata(input.id, input.amount, MessageMetadata(host, index))
     val message = validationInputWithMetadataFormat.write(inputWithMetadata).compactPrint
-    var record = new ProducerRecord[String, String](topic, input.id, message)
-    producer.send(record)
-  }
-
-  def requestPoolControl(producer: KafkaProducer[String, String], host: String): Unit = {
-        val input = PoolControlInput(host)
-        val message = poolControlInputFormat.write(input).compactPrint
-    var record = new ProducerRecord[String, String]("sandbox_akka_pool_control_input", "request", message)
+    val record = new ProducerRecord[String, String](topic, input.id, message)
     producer.send(record)
   }
 }

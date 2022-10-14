@@ -28,6 +28,7 @@ import spray.json._
 
 object Main extends JsonSupport {
   val version = 5
+  val poolSize = 3
   implicit val system: ActorSystem[SpawnProtocol.Command] = ActorSystem(MainActor(), "my-system")
   implicit val executionContext: ExecutionContext = system.executionContext
   implicit val timeout: Timeout = 2.seconds
@@ -39,21 +40,15 @@ object Main extends JsonSupport {
     val topic = "validation_input"
     val producer = Producer.buildProducer()
 
-    PoolControlStream.buildStream(host)
-    ReceiverStream.buildStream(host)
-    ProcessorStream.buildStream()
-
-    Producer.requestPoolControl(producer, host)
-
-//    val maxWaitTime: FiniteDuration = Duration(2, SECONDS)
-//    val actorFuture: Future[ActorRef[RequestActor.Message]] = system.ask(SpawnProtocol.Spawn(RequestActor("1"), name = "1", props = Props.empty, _))
-//    val actor = Await.result(actorFuture, maxWaitTime)
+    PoolControl.init(poolSize, host)
+//    ReceiverStream.buildStream(host)
+//    ProcessorStream.buildStream()
 
     val route =
       path("validations") {
         post {
           entity(as[ValidationInput]) { input =>
-            if (PoolControl.index != -1) {
+            if (PoolControl.atomicIndex.get() != -1) {
               println("[time]", "[start]", System.currentTimeMillis())
               Producer.produce(producer, host, topic, input)
 
