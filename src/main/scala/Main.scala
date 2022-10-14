@@ -66,7 +66,7 @@ object Main extends JsonSupport {
         }
       }
 
-    Http().newServerAt("localhost", 4000).bind(route)
+//    Http().newServerAt("localhost", 4000).bind(route)
 
     println(s"Server now online. Please navigate to http://localhost:4000")
   }

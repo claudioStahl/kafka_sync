@@ -39,7 +39,7 @@ object PoolControl {
     })
   }
 
-  def setupBase(zk: Zookeeper): Unit = {
+  private def setupBase(zk: Zookeeper): Unit = {
     zk.sync.exists(rootDir) match {
       case Some(_) => 0
       case None => zk.sync.create(rootDir, null, Seq(acl), Persistent)
@@ -51,57 +51,60 @@ object PoolControl {
     }
   }
 
-  def setupPool(zk: Zookeeper, poolSize: Int): Unit = {
+  private def setupPool(zk: Zookeeper, poolSize: Int): Unit = {
     (1 to poolSize).foreach { i =>
-      val poolPathIndex = poolDir + "/" + i
-      zk.sync.exists(poolPathIndex) match {
+      val poolIndexNode = poolDir + "/" + i
+      zk.sync.exists(poolIndexNode) match {
         case Some(_) => 0
-        case None => zk.sync.create(poolPathIndex, null, Seq(acl), Persistent)
+        case None => zk.sync.create(poolIndexNode, null, Seq(acl), Persistent)
       }
     }
   }
 
-  def connectToPool(zk: Zookeeper, poolSize: Int, host: String): Unit = {
+  private def connectToPool(zk: Zookeeper, poolSize: Int, host: String): Unit = {
     val total = collection.mutable.Map[Int, Int]()
 
+    zk.sync.sync
+
     (1 to poolSize).foreach { i =>
-      val poolPathIndex = poolDir + "/" + i
-      val indexChildren = zk.sync.children(poolPathIndex)
+      val poolIndexNode = poolDir + "/" + i
+      val indexChildren = zk.sync.children(poolIndexNode)
 
       total.put(i, indexChildren.length)
     }
 
-    val result = total.min
-    val currentIndex = result._1
-    val currentPath = poolDir + "/" + currentIndex + "/" + host
-    zk.sync.create(currentPath, null, Seq(acl), Ephemeral)
+    val currentIndex = total.minBy(_._2)._1
+    val currentNode = poolDir + "/" + currentIndex + "/" + host
+    zk.sync.create(currentNode, null, Seq(acl), Ephemeral)
     atomicIndex.set(currentIndex)
+
+    println("currentIndex=", currentIndex)
   }
 
-  def execWithLock(zk: Zookeeper)(exec: (Zookeeper) => Unit): Unit = {
+  private def execWithLock(zk: Zookeeper)(exec: (Zookeeper) => Unit): Unit = {
     zk.sync.exists(lockDir) match {
       case Some(_) => 0
       case None => zk.sync.create(lockDir, null, Seq(acl), Container)
     }
 
-    val currentNode = zk.sync.create(lockDir + "/lock-", null, Seq(acl), EphemeralSequential)
-    println("currentNode=", currentNode)
-
+    val currentNode = zk.sync.create(lockDir + "/", null, Seq(acl), EphemeralSequential)
     doExecWithLock(zk, currentNode)(exec)
   }
 
-  def doExecWithLock(zk: Zookeeper, currentNode: String)(exec: (Zookeeper) => Unit): Unit = {
+  private def doExecWithLock(zk: Zookeeper, currentNode: String)(exec: (Zookeeper) => Unit): Unit = {
+    println("currentNode=", currentNode)
     val currentName = currentNode.split("/").last
-    val currentNumber = currentName.split("-").last.toInt
-    val lastNumber = "%010d".format(currentNumber - 1)
-    val lastNode = lockDir + "/lock-" + lastNumber
+    val currentNumber = currentName.toInt
+    val lastName = "%010d".format(currentNumber - 1)
+    val lastNode = lockDir + "/" + lastName
     println("lastNode=", lastNode)
 
-    val lockChildren = zk.sync.children(lockDir)
+    val lockChildren = zk.sync.children(lockDir).sorted
     println("lockChildren=", lockChildren)
 
     if (lockChildren.head == currentName) {
       println("lockStatus=", true)
+
       exec(zk)
       zk.sync.delete(currentNode, None)
 
@@ -109,8 +112,9 @@ object PoolControl {
       println("lockStatus=", false)
 
       val existLast = zk.sync watch { e =>
-        println("watch.exists=", e)
-      } exists (currentNode)
+        println("waitLock=", e)
+        doExecWithLock(zk, currentNode)(exec)
+      } exists (lastNode)
 
       existLast match {
         case Some(_) => 0
