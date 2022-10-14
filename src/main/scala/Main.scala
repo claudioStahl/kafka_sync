@@ -1,4 +1,4 @@
-package claudiostahl
+package sandbox_akka
 
 import java.util
 import java.time.temporal.ChronoUnit
@@ -27,13 +27,15 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import spray.json._
 
 object Main extends JsonSupport {
-  val version = 12
+  val version = 1
   val poolSize = 3
   implicit val system: ActorSystem[SpawnProtocol.Command] = ActorSystem(MainActor(), "my-system")
   implicit val executionContext: ExecutionContext = system.executionContext
   implicit val timeout: Timeout = 2.seconds
 
   def main(args: Array[String]): Unit = {
+
+    println("[time]", "[main]", System.currentTimeMillis())
     val rand = new scala.util.Random
 
     val host = "node" + rand.nextInt().toString

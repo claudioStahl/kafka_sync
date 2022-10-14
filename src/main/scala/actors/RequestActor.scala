@@ -1,4 +1,4 @@
-package claudiostahl
+package sandbox_akka
 
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}

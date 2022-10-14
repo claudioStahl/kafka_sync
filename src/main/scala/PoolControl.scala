@@ -1,4 +1,4 @@
-package claudiostahl
+package sandbox_akka
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.net.InetSocketAddress

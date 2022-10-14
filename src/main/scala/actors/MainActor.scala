@@ -1,4 +1,4 @@
-package claudiostahl
+package sandbox_akka
 
 import akka.actor.typed.{Behavior, SpawnProtocol}
 import akka.actor.typed.scaladsl.Behaviors

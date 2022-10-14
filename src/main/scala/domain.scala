@@ -1,4 +1,4 @@
-package claudiostahl
+package sandbox_akka
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import spray.json.DefaultJsonProtocol

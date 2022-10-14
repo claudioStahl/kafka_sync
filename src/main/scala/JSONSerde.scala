@@ -1,4 +1,4 @@
-package claudiostahl
+package sandbox_akka
 
 import org.apache.kafka.common.serialization.{Deserializer, Serde, Serializer}
 import spray.json._

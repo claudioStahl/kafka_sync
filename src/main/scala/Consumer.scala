@@ -1,4 +1,4 @@
-package claudiostahl
+package sandbox_akka
 
 import scala.util._
 import scala.concurrent._
@@ -27,17 +27,17 @@ object Consumer {
     props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
     props.put("group.id", "sandbox_akka_" + host)
 
-    val consumer = new KafkaConsumer[String, String](props)
-    consumer.subscribe(Collections.singletonList(topic))
-
-    Runtime.getRuntime.addShutdownHook(new Thread {
-      override def run(): Unit = {
-        consumer.close()
-      }
-    })
-
     val thread = new Thread {
       override def run {
+        val consumer = new KafkaConsumer[String, String](props)
+        consumer.subscribe(Collections.singletonList(topic))
+
+        Runtime.getRuntime.addShutdownHook(new Thread {
+          override def run(): Unit = {
+            consumer.close()
+          }
+        })
+
         while (true) {
           val records = consumer.poll(Duration.ofMillis(5L))
           records.iterator().forEachRemaining { record: ConsumerRecord[String, String] =>
