@@ -27,7 +27,7 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import spray.json._
 
 object Main extends JsonSupport {
-  val version = 5
+  val version = 12
   val poolSize = 3
   implicit val system: ActorSystem[SpawnProtocol.Command] = ActorSystem(MainActor(), "my-system")
   implicit val executionContext: ExecutionContext = system.executionContext
@@ -41,8 +41,8 @@ object Main extends JsonSupport {
     val producer = Producer.buildProducer()
 
     PoolControl.init(poolSize, host)
-//    ReceiverStream.buildStream(host)
-//    ProcessorStream.buildStream()
+    ReceiverStream.buildStream(host)
+    ProcessorStream.buildStream()
 
     val route =
       path("validations") {
@@ -66,7 +66,7 @@ object Main extends JsonSupport {
         }
       }
 
-//    Http().newServerAt("localhost", 4000).bind(route)
+    Http().newServerAt("localhost", 4000).bind(route)
 
     println(s"Server now online. Please navigate to http://localhost:4000")
   }

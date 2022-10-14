@@ -79,6 +79,8 @@ object PoolControl {
     atomicIndex.set(currentIndex)
 
     println("currentIndex=", currentIndex)
+
+    Consumer.launchConsumer(host, currentIndex)
   }
 
   private def execWithLock(zk: Zookeeper)(exec: (Zookeeper) => Unit): Unit = {
