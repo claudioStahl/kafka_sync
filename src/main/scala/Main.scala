@@ -28,19 +28,17 @@ import spray.json._
 import org.apache.kafka.streams.KafkaStreams.State
 
 object Main extends JsonSupport {
-  val version = 1
-  val poolSize = 3
-  implicit val system: ActorSystem[SpawnProtocol.Command] = ActorSystem(MainActor(), "my-system")
+  implicit val system: ActorSystem[SpawnProtocol.Command] = ActorSystem(MainActor(), "app")
   implicit val executionContext: ExecutionContext = system.executionContext
   implicit val timeout: Timeout = 2.seconds
 
   def main(args: Array[String]): Unit = {
+    val host = sys.env("HOST")
+    val applicationName = sys.env("APPLICATION_NAME")
+    val processorTopicInput = sys.env("PROCESSOR_TOPIC_INPUT")
+    val serverPort = sys.env("SERVER_PORT").toInt
+    val poolSize = sys.env("POOL_SIZE").toInt
 
-    println("[time]", "[main]", System.currentTimeMillis())
-    val rand = new scala.util.Random
-
-    val host = "node" + rand.nextInt().toString
-    val topic = "validation_input"
     val producer = Producer.buildProducer()
 
     PoolControl.init(poolSize, host)
@@ -52,12 +50,10 @@ object Main extends JsonSupport {
         post {
           entity(as[ValidationInput]) { input =>
             if (PoolControl.atomicIndex.get() != -1 && receiverStream.state() == State.RUNNING) {
-              println("[time]", "[start]", System.currentTimeMillis())
-              Producer.produce(producer, host, topic, input)
+              Producer.produce(producer, host, processorTopicInput, input)
 
               onComplete(waitReply(input.id)) {
                 case Success(value) => {
-                  println("[time]", "[finish]", System.currentTimeMillis())
                   complete(StatusCodes.OK, value)
                 }
                 case Failure(ex) => complete(StatusCodes.UnprocessableEntity, ex.getMessage)
@@ -69,16 +65,15 @@ object Main extends JsonSupport {
         }
       }
 
-    Http().newServerAt("localhost", 4000).bind(route)
+    Http().newServerAt("localhost", serverPort).bind(route)
 
-    println(s"Server now online. Please navigate to http://localhost:4000")
+    println(s"Server now online. Please navigate to http://localhost:$serverPort")
   }
 
   private def waitReply(id: String): Future[String] = {
     val actorFuture: Future[ActorRef[RequestActor.Message]] = system.ask(SpawnProtocol.Spawn(RequestActor(id), name = id, props = Props.empty, _))
 
     actorFuture.flatMap { actor =>
-      println("[time]", "[spawn_actor]", System.currentTimeMillis())
       val resultFuture = actor ? RequestActor.Wait
 
       resultFuture

@@ -8,7 +8,7 @@ import org.apache.kafka.clients.producer.ProducerRecord
 object Producer extends JsonSupport {
   def buildProducer(): KafkaProducer[String, String] = {
     val config = new Properties()
-    config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
+    config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, sys.env("KAFKA_SERVERS"))
     config.put(
       "key.serializer",
       "org.apache.kafka.common.serialization.StringSerializer"

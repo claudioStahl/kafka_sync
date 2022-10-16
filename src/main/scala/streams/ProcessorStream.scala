@@ -15,30 +15,30 @@ object ProcessorStream extends JsonSupport {
   import Serdes._
 
   def buildStream(): Unit = {
+    val applicationName = sys.env("APPLICATION_NAME")
+    val processorTopicInput = sys.env("PROCESSOR_TOPIC_INPUT")
+    val processorTopicOutput = sys.env("PROCESSOR_TOPIC_OUTPUT")
+
     val config: Properties = new Properties
-    config.put(StreamsConfig.APPLICATION_ID_CONFIG, "sandbox_akka_processor_v" + Main.version.toString)
-    config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
+    config.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationName + "_processor")
+    config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, sys.env("KAFKA_SERVERS"))
     config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, JSerdes.String.getClass)
     config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, JSerdes.String.getClass)
     config.put(ProducerConfig.LINGER_MS_CONFIG, 0)
-
-    // we disable the cache to demonstrate all the "steps" involved in the transformation - not recommended in prod
-    // config.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, "0")
 
     implicit val validationInputWithMetadata = new JSONSerde[ValidationInputWithMetadata]
     implicit val validationResponseWithMetadata = new JSONSerde[ValidationResponseWithMetadata]
 
     val builder: StreamsBuilder = new StreamsBuilder
 
-    val inputs: KStream[String, ValidationInputWithMetadata] = builder.stream[String, ValidationInputWithMetadata]("validation_input")
+    val inputs: KStream[String, ValidationInputWithMetadata] = builder.stream[String, ValidationInputWithMetadata](processorTopicInput)
 
     val processedInputs: KStream[String, ValidationResponseWithMetadata] = inputs.mapValues(input => {
-      println("[time]", "[ProcessorStream.mapValues]", System.currentTimeMillis())
       ValidationResponseWithMetadata(input.id, true, input.metadata)
     })
 
-    processedInputs.to("validation_output")
+    processedInputs.to(processorTopicOutput)
 
     val topology = builder.build()
 

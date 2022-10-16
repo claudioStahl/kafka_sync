@@ -7,7 +7,7 @@ import com.loopfor.zookeeper._
 object PoolControl {
   var atomicIndex = new AtomicInteger(-1)
   val acl = ACL("world:anyone=*")
-  val rootDir = "/sandbox_akka"
+  val rootDir = sys.env("ZOOKEEPER_ROOT_DIR")
   val poolDir = rootDir + "/pool"
   val lockDir = rootDir + "/_lock"
 
@@ -15,7 +15,10 @@ object PoolControl {
     val inet = new InetSocketAddress("localhost", 2181)
 
     val config = Configuration {
-      inet :: Nil
+      sys.env("ZOOKEEPER_SERVERS").split(",").map { item =>
+        val Array(host, port) = item.split(":").map(_.trim)
+        new InetSocketAddress(host, port.toInt)
+      }
     } withWatcher { (event, session) =>
       println("event=", event)
       println("session=", session, session.state == ConnectedState)

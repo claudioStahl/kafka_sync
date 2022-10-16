@@ -18,14 +18,15 @@ object Consumer {
     implicit val executionContext: ExecutionContext = system.executionContext
     implicit val timeout: Timeout = 2.seconds
 
-    val topic = "sandbox_akka_responses_p" + poolIndex.toString
+    val applicationName = sys.env("APPLICATION_NAME")
+    val topic = applicationName + "_responses_p" + poolIndex.toString
 
     val props = new Properties()
-    props.put("bootstrap.servers", "localhost:9092")
+    props.put("bootstrap.servers", sys.env("KAFKA_SERVERS"))
     props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
     props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
     props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
-    props.put("group.id", "sandbox_akka_" + host)
+    props.put("group.id", applicationName + "_" + host)
 
     val thread = new Thread {
       override def run {
@@ -41,7 +42,6 @@ object Consumer {
         while (true) {
           val records = consumer.poll(Duration.ofMillis(5L))
           records.iterator().forEachRemaining { record: ConsumerRecord[String, String] =>
-            println("[time]", "[consume_record]", System.currentTimeMillis())
             val key = ServiceKey[RequestActor.Message](record.key)
             val receptionistFulture = Receptionist.get(system).ref.ask(Receptionist.Find(key))
 
@@ -49,7 +49,6 @@ object Consumer {
               case Success(listing: Receptionist.Listing) =>
                 val instances = listing.serviceInstances(key)
                 instances.foreach { actor =>
-                  println("[time]", "[found_actor]", System.currentTimeMillis())
                   actor ! RequestActor.Reply(record.value)
                 }
               case Failure(ex) =>

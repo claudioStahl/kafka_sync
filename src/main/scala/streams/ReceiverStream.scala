@@ -16,33 +16,32 @@ object ReceiverStream extends JsonSupport {
   import Serdes._
 
   def buildStream(poolSize: Int): KafkaStreams = {
+    val applicationName = sys.env("APPLICATION_NAME")
+    val processorTopicOutput = sys.env("PROCESSOR_TOPIC_OUTPUT")
+
     val config: Properties = new Properties
-    config.put(StreamsConfig.APPLICATION_ID_CONFIG, "sandbox_akka_receiver_v" + Main.version.toString)
-    config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
+    config.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationName + "_receiver")
+    config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, sys.env("KAFKA_SERVERS"))
     config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
     config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, JSerdes.String.getClass)
     config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, JSerdes.String.getClass)
     config.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 1)
     config.put(ProducerConfig.LINGER_MS_CONFIG, 0)
 
-    // we disable the cache to demonstrate all the "steps" involved in the transformation - not recommended in prod
-    config.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, "0")
-
     implicit val validationResponseWithMetadata = new JSONSerde[ValidationResponseWithMetadata]
 
     val builder: StreamsBuilder = new StreamsBuilder
 
-    val outputs: KStream[String, ValidationResponseWithMetadata] = builder.stream[String, ValidationResponseWithMetadata]("validation_output")
+    val outputs: KStream[String, ValidationResponseWithMetadata] = builder.stream[String, ValidationResponseWithMetadata](processorTopicOutput)
     val outputsBranched: BranchedKStream[String, ValidationResponseWithMetadata]  = outputs.split()
 
     (1 to poolSize).foreach { i =>
       outputsBranched.branch(
         (k: String, v: ValidationResponseWithMetadata) => {
-          println("[time]", "[ReceiverStream.branch]", System.currentTimeMillis())
           v.metadata.poolIndex == i
         },
         Branched.withConsumer(ks => {
-          ks.to("sandbox_akka_responses_p" + i.toString)
+          ks.to(applicationName + "_responses_p" + i.toString)
         })
       )
     }
