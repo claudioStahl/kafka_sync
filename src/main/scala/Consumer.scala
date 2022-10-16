@@ -48,10 +48,10 @@ object Consumer {
             receptionistFulture.onComplete {
               case Success(listing: Receptionist.Listing) =>
                 val instances = listing.serviceInstances(key)
-                val actor = instances.iterator.next()
-                println("[time]", "[found_actor]", System.currentTimeMillis())
-                actor ! RequestActor.Reply(record.value)
-
+                instances.foreach { actor =>
+                  println("[time]", "[found_actor]", System.currentTimeMillis())
+                  actor ! RequestActor.Reply(record.value)
+                }
               case Failure(ex) =>
                 println("An error has occurred: " + ex.getMessage)
             }

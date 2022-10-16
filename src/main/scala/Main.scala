@@ -25,6 +25,7 @@ import akka.http.scaladsl.server.Directives
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import spray.json._
+import org.apache.kafka.streams.KafkaStreams.State
 
 object Main extends JsonSupport {
   val version = 1
@@ -43,14 +44,14 @@ object Main extends JsonSupport {
     val producer = Producer.buildProducer()
 
     PoolControl.init(poolSize, host)
-    ReceiverStream.buildStream(host)
+    val receiverStream = ReceiverStream.buildStream(poolSize)
     ProcessorStream.buildStream()
 
     val route =
       path("validations") {
         post {
           entity(as[ValidationInput]) { input =>
-            if (PoolControl.atomicIndex.get() != -1) {
+            if (PoolControl.atomicIndex.get() != -1 && receiverStream.state() == State.RUNNING) {
               println("[time]", "[start]", System.currentTimeMillis())
               Producer.produce(producer, host, topic, input)
 

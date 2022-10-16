@@ -15,9 +15,7 @@ import org.apache.kafka.clients.producer.ProducerConfig
 object ReceiverStream extends JsonSupport {
   import Serdes._
 
-  def buildStream(host: String): Unit = {
-    val poolSize = 3
-
+  def buildStream(poolSize: Int): KafkaStreams = {
     val config: Properties = new Properties
     config.put(StreamsConfig.APPLICATION_ID_CONFIG, "sandbox_akka_receiver_v" + Main.version.toString)
     config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
@@ -62,5 +60,7 @@ object ReceiverStream extends JsonSupport {
         streams.close()
       }
     })
+
+    streams
   }
 }
