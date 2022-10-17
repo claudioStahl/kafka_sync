@@ -1,5 +1,6 @@
 package sandbox_akka
 
+import scala.io.Source
 import java.util
 import java.time.temporal.ChronoUnit
 import collection.JavaConverters._
@@ -57,6 +58,7 @@ object Main {
     val host = sys.env("HOST")
     val applicationName = sys.env("APPLICATION_NAME")
     val processorTopicInput = sys.env("PROCESSOR_TOPIC_INPUT")
+    val jsonSchemaFilePath = sys.env("JSON_SCHEMA_FILE_PATH")
     val serverPort = sys.env("SERVER_PORT").toInt
     val poolSize = sys.env("POOL_SIZE").toInt
 
@@ -66,44 +68,14 @@ object Main {
     val receiverStream = ReceiverStream.buildStream(poolSize)
     ProcessorStream.buildStream()
 
-    val inputSchema: Schema = Schema.load(
-      json"""
-        {
-          "type": "object",
-          "required": [
-              "id",
-              "amount"
-          ],
-          "properties": {
-              "id": {
-                  "type": "string",
-                  "title": "The id Schema",
-                  "examples": [
-                      "abc"
-                  ]
-              },
-              "amount": {
-                  "type": "integer",
-                  "title": "The amount Schema",
-                  "examples": [
-                      10
-                  ]
-              }
-          },
-          "examples": [{
-              "id": "abc",
-              "amount": 10
-          }]
-        }
-      """
-    )
+    val jsonSchemaValue = Source.fromFile(jsonSchemaFilePath).getLines.mkString
+    val jsonSchema: Schema = Schema.load(parse(jsonSchemaValue).toOption.get)
 
     val route = handleRejections(myRejectionHandler) {
       path("validations") {
         post {
           entity(as[Json]) { input =>
-            println("validate=", inputSchema.validate(input))
-            inputSchema.validate(input) match {
+            jsonSchema.validate(input) match {
               case Valid(_) => {
                 input.hcursor.downField("id").as[String] match {
                   case Right(id) => {

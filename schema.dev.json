@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "required": [
+    "id",
+    "amount"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "title": "The id Schema",
+      "examples": [
+        "abc"
+      ]
+    },
+    "amount": {
+      "type": "integer",
+      "title": "The amount Schema",
+      "examples": [
+        10
+      ]
+    }
+  },
+  "examples": [{
+    "id": "abc",
+    "amount": 10
+  }]
+}
