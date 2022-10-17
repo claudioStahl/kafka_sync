@@ -43,14 +43,12 @@ object PoolControl {
   }
 
   private def setupBase(zk: Zookeeper): Unit = {
-    zk.sync.exists(rootDir) match {
-      case Some(_) => 0
-      case None => zk.sync.create(rootDir, null, Seq(acl), Persistent)
+    if (zk.sync.exists(rootDir).isEmpty) {
+      zk.sync.create(rootDir, null, Seq(acl), Persistent)
     }
 
-    zk.sync.exists(poolDir) match {
-      case Some(_) => 0
-      case None => zk.sync.create(poolDir, null, Seq(acl), Persistent)
+    if (zk.sync.exists(poolDir).isEmpty) {
+      zk.sync.create(poolDir, null, Seq(acl), Persistent)
     }
   }
 
@@ -117,10 +115,7 @@ object PoolControl {
         doExecWithLock(zk, currentNode)(exec)
       } exists (lastNode)
 
-      existLast match {
-        case Some(_) => 0
-        case None => doExecWithLock(zk, currentNode)(exec)
-      }
+      if (existLast.isEmpty) doExecWithLock(zk, currentNode)(exec)
     }
   }
 }
