@@ -7,6 +7,7 @@ import scala.concurrent.duration._
 import scala.concurrent._
 import scala.util._
 import java.util.Properties
+import org.apache.kafka.streams.KafkaStreams.State
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.Behavior
@@ -25,7 +26,6 @@ import akka.http.scaladsl.server.Directives
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import spray.json._
-import org.apache.kafka.streams.KafkaStreams.State
 
 object Main extends JsonSupport {
   implicit val system: ActorSystem[SpawnProtocol.Command] = ActorSystem(MainActor(), "app")
@@ -45,6 +45,11 @@ object Main extends JsonSupport {
     val receiverStream = ReceiverStream.buildStream(poolSize)
     ProcessorStream.buildStream()
 
+    var d = JsObject(
+      "name" -> JsString("test")
+    )
+    println("json=", d)
+
     val route =
       path("validations") {
         post {
@@ -54,12 +59,16 @@ object Main extends JsonSupport {
 
               onComplete(waitReply(input.id)) {
                 case Success(value) => {
-                  complete(StatusCodes.OK, value)
+                  complete(HttpResponse(entity = HttpEntity(ContentTypes.`application/json`, value)))
                 }
-                case Failure(ex) => complete(StatusCodes.UnprocessableEntity, ex.getMessage)
+                case Failure(ex) => {
+                  val resp = JsObject("error" -> JsString(ex.getMessage))
+                  complete(StatusCodes.UnprocessableEntity, resp)
+                }
               }
             } else {
-              complete(StatusCodes.UnprocessableEntity, "not_ready")
+              val resp = JsObject("error" -> JsString("not_ready"))
+              complete(StatusCodes.UnprocessableEntity, resp)
             }
           }
         }
