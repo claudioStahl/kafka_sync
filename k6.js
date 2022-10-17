@@ -4,8 +4,8 @@ import { sleep } from 'k6';
 var id = 1
 
 export const options = {
-  vus: 1,
-  duration: '5s',
+  vus: 10,
+  duration: '30s',
 };
 
 export default function () {
