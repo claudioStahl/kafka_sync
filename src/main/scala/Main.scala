@@ -79,7 +79,7 @@ object Main {
             if (PoolControl.atomicIndex.get() != -1 && receiverStream.state() == State.RUNNING) {
               complete(StatusCodes.OK, "Ready")
             } else {
-              complete(StatusCodes.InternalServerError, "NotReady")
+              complete(StatusCodes.ServiceUnavailable, "NotReady")
             }
           }
         },
