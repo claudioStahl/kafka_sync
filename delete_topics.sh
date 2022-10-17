@@ -1,6 +1,19 @@
 #! /bin/bash
 
-for topic in validation_input validation_output sandbox_akka_responses_p1 sandbox_akka_responses_p2 sandbox_akka_responses_p3
-do
-  docker exec -it global_kafka bash -c "/usr/bin/kafka-topics --delete --zookeeper zookeeper:2181 --topic ${topic}"
+delete_topic()
+{
+  docker exec -it $SCRIPT_CONTAINER_NAME bash -c "/usr/bin/kafka-topics --delete --zookeeper $SCRIPT_ZOOKEEPER_SERVERS --topic $1"
+}
+
+env_name=${1:-"dev"}
+
+echo "Start with env: ${env_name}"
+
+export $(cat "${env_name}.env" | xargs)
+
+delete_topic $PROCESSOR_TOPIC_INPUT
+delete_topic $PROCESSOR_TOPIC_OUTPUT
+
+for ((i=1; i<=$POOL_SIZE; i++)); do
+   delete_topic "${APPLICATION_NAME}_responses_p${i}"
 done
