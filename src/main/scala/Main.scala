@@ -68,45 +68,62 @@ object Main {
     val receiverStream = ReceiverStream.buildStream(poolSize)
     ProcessorStream.buildStream()
 
-    val jsonSchemaValue = Source.fromFile(jsonSchemaFilePath).getLines.mkString
-    val jsonSchema: Schema = Schema.load(parse(jsonSchemaValue).toOption.get)
+    val jsonSchemaRaw = Source.fromFile(jsonSchemaFilePath).getLines.mkString
+    val jsonSchemaValue = parse(jsonSchemaRaw).toOption.get
+    val jsonSchema: Schema = Schema.load(jsonSchemaValue)
 
     val route = handleRejections(myRejectionHandler) {
-      path("validations") {
+      concat(
+        get {
+          path("ready") {
+            if (PoolControl.atomicIndex.get() != -1 && receiverStream.state() == State.RUNNING) {
+              complete(StatusCodes.OK, "Ready")
+            } else {
+              complete(StatusCodes.InternalServerError, "NotReady")
+            }
+          }
+        },
+        get {
+          path("validations" / "schema") {
+            complete(StatusCodes.OK, jsonSchemaValue)
+          }
+        },
         post {
-          entity(as[Json]) { input =>
-            jsonSchema.validate(input) match {
-              case Valid(_) => {
-                input.hcursor.downField("id").as[String] match {
-                  case Right(id) => {
-                    if (PoolControl.atomicIndex.get() != -1 && receiverStream.state() == State.RUNNING) {
-                      Producer.produce(producer, host, processorTopicInput, id, input)
+          path("validations") {
+            entity(as[Json]) { input =>
+              jsonSchema.validate(input) match {
+                case Valid(_) => {
+                  input.hcursor.downField("id").as[String] match {
+                    case Right(id) => {
+                      if (PoolControl.atomicIndex.get() != -1 && receiverStream.state() == State.RUNNING) {
+                        Producer.produce(producer, host, processorTopicInput, id, input)
 
-                      onComplete(waitReply(id)) {
-                        case Success(value) => {
-                          complete(HttpResponse(entity = HttpEntity(ContentTypes.`application/json`, value)))
+                        onComplete(waitReply(id)) {
+                          case Success(value) => {
+                            complete(HttpResponse(entity = HttpEntity(ContentTypes.`application/json`, value)))
+                          }
+                          case Failure(ex) => {
+                            complete(StatusCodes.UnprocessableEntity, ErrorResponse("ValidationFailed", Some(ex.getMessage)))
+                          }
                         }
-                        case Failure(ex) => {
-                          complete(StatusCodes.UnprocessableEntity, ErrorResponse("ValidationFailed", Some(ex.getMessage)))
-                        }
+                      } else {
+                        complete(StatusCodes.UnprocessableEntity, ErrorResponse("NotReady"))
                       }
-                    } else {
-                      complete(StatusCodes.UnprocessableEntity, ErrorResponse("NotReady"))
+                    }
+                    case Left(_) => {
+                      complete(StatusCodes.BadRequest, ErrorResponse("NoId"))
                     }
                   }
-                  case Left(_) => {
-                    complete(StatusCodes.BadRequest, ErrorResponse("NoId"))
-                  }
                 }
-              }
-              case Invalid(er) => {
-                val message = er.map(_.getMessage).head
-                complete(StatusCodes.BadRequest, ErrorResponse("InvalidInput", Some(message)))
+                case Invalid(er) => {
+                  val message = er.map(_.getMessage).head
+                  complete(StatusCodes.BadRequest, ErrorResponse("InvalidInput", Some(message)))
+                }
               }
             }
           }
         }
-      }
+      )
     }
 
     Http().newServerAt("localhost", serverPort).bind(route)
