@@ -10,11 +10,12 @@ import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.scala.serialization.Serdes
 import org.apache.kafka.streams.KafkaStreams
 import org.apache.kafka.clients.producer.ProducerConfig
-import spray.json._
+import com.goyeau.kafka.streams.circe.CirceSerdes._
+import io.circe._
+import io.circe.literal._
+import Serdes._
 
-object ProcessorStream extends JsonSupport {
-  import Serdes._
-
+object ProcessorStream {
   def buildStream(): Unit = {
     val applicationName = sys.env("APPLICATION_NAME")
     val processorTopicInput = sys.env("PROCESSOR_TOPIC_INPUT")
@@ -28,19 +29,13 @@ object ProcessorStream extends JsonSupport {
     config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, JSerdes.String.getClass)
     config.put(ProducerConfig.LINGER_MS_CONFIG, 0)
 
-    implicit val jsObjectSerde = new JSONSerde[JsObject]
-
     val builder: StreamsBuilder = new StreamsBuilder
 
-    val inputs: KStream[String, JsObject] = builder.stream[String, JsObject](processorTopicInput)
+    val inputs: KStream[String, Json] = builder.stream[String, Json](processorTopicInput)
 
-    val processedInputs: KStream[String, JsObject] = inputs.mapValues((key, value) => {
-      val metadata = value.fields.get("metadata").get
-      JsObject(
-        "id" -> JsString(key),
-        "is_fraud" -> JsBoolean(true),
-        "metadata" -> metadata
-      )
+    val processedInputs: KStream[String, Json] = inputs.mapValues((key, value) => {
+      val metadata = value.hcursor.get[Json]("metadata").toOption.get
+      json"""{"id": $key, "is_fraud": true, "metadata": $metadata}"""
     })
 
     processedInputs.to(processorTopicOutput)

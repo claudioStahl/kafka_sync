@@ -4,7 +4,8 @@ import java.util.Properties
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
-import spray.json._
+import io.circe._
+import io.circe.literal._
 
 object Producer {
   def buildProducer(): KafkaProducer[String, String] = {
@@ -31,10 +32,11 @@ object Producer {
     producer
   }
 
-  def produce(producer: KafkaProducer[String, String], host: String, topic: String, id: String, input: JsObject): Unit = {
+  def produce(producer: KafkaProducer[String, String], host: String, topic: String, id: String, input: Json): Unit = {
     val index = PoolControl.atomicIndex.get()
-    val inputWithMetadata = JsObject(input.fields + ("metadata" -> JsObject("host" -> JsString(host), "poolIndex" -> JsNumber(index))))
-    val message = inputWithMetadata.compactPrint
+    val metadata = json"""{ "metadata": { "host": $host, "poolIndex": $index } }"""
+    val inputWithMetadata = input.deepMerge(metadata)
+    val message = inputWithMetadata.noSpaces
     val record = new ProducerRecord[String, String](topic, id, message)
     producer.send(record)
   }

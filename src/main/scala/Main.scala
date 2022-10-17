@@ -24,10 +24,13 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
-import spray.json._
+import io.circe._
+import io.circe.literal._
+import io.circe.parser._
+import CirceSupport._
+import io.circe.generic.auto._
 
-object Main extends JsonSupport {
+object Main {
   implicit val system: ActorSystem[SpawnProtocol.Command] = ActorSystem(MainActor(), "app")
   implicit val executionContext: ExecutionContext = system.executionContext
   implicit val timeout: Timeout = 2.seconds
@@ -45,12 +48,14 @@ object Main extends JsonSupport {
     val receiverStream = ReceiverStream.buildStream(poolSize)
     ProcessorStream.buildStream()
 
+//    validate()
+
     val route =
       path("validations") {
         post {
-          entity(as[JsObject]) { input =>
-            input.getFields("id") match {
-              case Seq(JsString(id)) => {
+          entity(as[Json]) { input =>
+            input.hcursor.downField("id").as[String] match {
+              case Right(id) => {
                 if (PoolControl.atomicIndex.get() != -1 && receiverStream.state() == State.RUNNING) {
                   Producer.produce(producer, host, processorTopicInput, id, input)
 
@@ -59,17 +64,17 @@ object Main extends JsonSupport {
                       complete(HttpResponse(entity = HttpEntity(ContentTypes.`application/json`, value)))
                     }
                     case Failure(ex) => {
-                      val resp = JsObject("error" -> JsString(ex.getMessage))
+                      val resp = json"""{"error": ${ ex.getMessage }}"""
                       complete(StatusCodes.UnprocessableEntity, resp)
                     }
                   }
                 } else {
-                  val resp = JsObject("error" -> JsString("not_ready"))
+                  val resp = json"""{"error": "not_ready"}"""
                   complete(StatusCodes.UnprocessableEntity, resp)
                 }
               }
-              case _ => {
-                val resp = JsObject("error" -> JsString("no_id"))
+              case Left(_) => {
+                val resp = json"""{"error": "no_id"}"""
                 complete(StatusCodes.UnprocessableEntity, resp)
               }
             }
@@ -91,4 +96,30 @@ object Main extends JsonSupport {
       resultFuture
     }
   }
+
+//  private  def validate(): Unit = {
+//    val polygonSchema: Schema = Schema.load(
+//      """
+//        {
+//          "type": "object",
+//          "properties": {
+//            "type": {
+//              "type": "string",
+//              "const": "Polygon"
+//            },
+//            "coordinates": {
+//              "type": "array",
+//              "items": {
+//                "type": "array",
+//                "minItems": 2,
+//                "maxItems": 3
+//              }
+//            }
+//          }
+//        }
+//      """
+//    )
+//
+//    val good = """{"type": "Polygon", "coordinates": [[0, 0], [1, 0], [1, 1], [0, 1]] }"""
+//  }
 }

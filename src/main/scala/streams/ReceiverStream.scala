@@ -11,11 +11,11 @@ import org.apache.kafka.streams.scala.serialization.Serdes
 import org.apache.kafka.streams.KafkaStreams
 import org.apache.kafka.streams.scala.kstream.BranchedKStream
 import org.apache.kafka.clients.producer.ProducerConfig
-import spray.json._
+import com.goyeau.kafka.streams.circe.CirceSerdes._
+import io.circe._
+import Serdes._
 
-object ReceiverStream extends JsonSupport {
-  import Serdes._
-
+object ReceiverStream {
   def buildStream(poolSize: Int): KafkaStreams = {
     val applicationName = sys.env("APPLICATION_NAME")
     val processorTopicOutput = sys.env("PROCESSOR_TOPIC_OUTPUT")
@@ -29,23 +29,17 @@ object ReceiverStream extends JsonSupport {
     config.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 1)
     config.put(ProducerConfig.LINGER_MS_CONFIG, 0)
 
-    implicit val jsObjectSerde = new JSONSerde[JsObject]
-
     val builder: StreamsBuilder = new StreamsBuilder
 
-    val outputs: KStream[String, JsObject] = builder.stream[String, JsObject](processorTopicOutput)
-    val outputsBranched: BranchedKStream[String, JsObject]  = outputs.split()
+    val outputs: KStream[String, Json] = builder.stream[String, Json](processorTopicOutput)
+    val outputsBranched: BranchedKStream[String, Json]  = outputs.split()
 
     (1 to poolSize).foreach { i =>
       outputsBranched.branch(
-        (k: String, v: JsObject) => {
-          v.getFields("metadata") match {
-            case Seq(JsObject(metadata)) =>
-              metadata.get("poolIndex") match {
-                case Some(JsNumber(poolIndex)) => poolIndex == i
-                case _ => false
-              }
-            case _ => false
+        (k: String, v: Json) => {
+          v.hcursor.downField("metadata").downField("poolIndex").as[Int] match {
+            case Right(poolIndex) => poolIndex == i
+            case Left(_) => false
           }
         },
         Branched.withConsumer(ks => {
