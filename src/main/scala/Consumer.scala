@@ -8,6 +8,7 @@ import java.time.Duration
 import java.util.Properties
 import java.util.Collections
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, KafkaConsumer}
+import org.apache.kafka.common.errors.WakeupException
 import akka.actor.typed.{ActorSystem, SpawnProtocol}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.AskPattern._
@@ -30,35 +31,46 @@ object Consumer {
 
     val thread = new Thread {
       override def run {
+        val mainThread = Thread.currentThread
         val consumer = new KafkaConsumer[String, String](props)
         consumer.subscribe(Collections.singletonList(topic))
 
         Runtime.getRuntime.addShutdownHook(new Thread {
           override def run(): Unit = {
-            consumer.close()
+            println("Consumer Shutdown Starting");
+            consumer.wakeup()
+
+            try mainThread.join
+            catch {
+              case e: InterruptedException =>
+                e.printStackTrace()
+            }
           }
         })
 
-        while (true) {
-          val records = consumer.poll(Duration.ofMillis(5L))
-          records.iterator().forEachRemaining { record: ConsumerRecord[String, String] =>
-            val key = ServiceKey[RequestActor.Message](record.key)
-            val receptionistFulture = Receptionist.get(system).ref.ask(Receptionist.Find(key))
+        try {
+          while (true) {
+            val records = consumer.poll(Duration.ofMillis(5L))
+            records.iterator().forEachRemaining { record: ConsumerRecord[String, String] =>
+              val key = ServiceKey[RequestActor.Message](record.key)
+              val receptionistFulture = Receptionist.get(system).ref.ask(Receptionist.Find(key))
 
-            receptionistFulture.onComplete {
-              case Success(listing: Receptionist.Listing) =>
-                val instances = listing.serviceInstances(key)
-                instances.foreach { actor =>
-                  actor ! RequestActor.Reply(record.value)
-                }
-              case Failure(ex) =>
-                println("An error has occurred: " + ex.getMessage)
+              receptionistFulture.onComplete {
+                case Success(listing: Receptionist.Listing) =>
+                  val instances = listing.serviceInstances(key)
+                  instances.foreach { actor =>
+                    actor ! RequestActor.Reply(record.value)
+                  }
+                case Failure(ex) =>
+                  println("An error has occurred: " + ex.getMessage)
+              }
             }
-
-//            println(
-//              s"""offset=${record.offset}, partition=${record.partition}, key=${record.key}, value=${record.value}, schema=${record.value}""".stripMargin
-//            )
           }
+        } catch  {
+          case _: WakeupException => Nil
+        } finally {
+          consumer.close();
+          println("Consumer closed");
         }
       }
     }
