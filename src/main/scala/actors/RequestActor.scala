@@ -11,12 +11,6 @@ object RequestActor {
 
   final case class Reply(value: String) extends Message
 
-  case object Hello extends Message
-
-  case object IdentifyYourself extends Message
-
-  private case object Timeout extends Message
-
   sealed trait Data
 
   case object Uninitialized extends Data
@@ -33,12 +27,6 @@ object RequestActor {
   private def handle(id: String, data: Data): Behavior[Message] = Behaviors.setup { context =>
     Behaviors.receiveMessage[Message] { message =>
       (message, data) match {
-        case (IdentifyYourself, _) =>
-          println(IdentifyYourself, context.self)
-          Behaviors.same
-        case (Hello, _) =>
-          println("hello back at you")
-          Behaviors.unhandled
         case (Wait(ref), Uninitialized) =>
           handle(id, Initialized(ref))
         case (Reply(value), Initialized(ref)) =>

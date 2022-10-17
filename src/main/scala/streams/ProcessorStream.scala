@@ -15,8 +15,11 @@ import Serdes._
 import io.circe._
 import io.circe.syntax._
 import io.circe.generic.auto._
+import com.typesafe.scalalogging.Logger
 
 object ProcessorStream {
+  val logger = Logger(getClass.getName)
+
   def buildStream(): Unit = {
     val applicationName = sys.env("APPLICATION_NAME")
     val processorTopicInput = sys.env("PROCESSOR_TOPIC_INPUT")
@@ -43,7 +46,7 @@ object ProcessorStream {
 
     val topology = builder.build()
 
-    println("ProcessorStream.topology", topology.describe())
+    logger.info("ProcessorStream " + topology.describe())
 
     val streams: KafkaStreams = new KafkaStreams(topology, config)
     streams.start()

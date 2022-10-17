@@ -34,11 +34,14 @@ import io.circe.generic.auto._
 import io.circe.schema.Schema
 import CirceSupport._
 import cats.data.Validated.{Invalid, Valid}
+import com.typesafe.scalalogging.Logger
 
 object Main {
   implicit val system: ActorSystem[SpawnProtocol.Command] = ActorSystem(MainActor(), "app")
   implicit val executionContext: ExecutionContext = system.executionContext
   implicit val timeout: Timeout = 2.seconds
+
+  val logger = Logger(getClass.getName)
 
   def myRejectionHandler =
     RejectionHandler.newBuilder()
@@ -126,7 +129,7 @@ object Main {
 
     Http().newServerAt("localhost", serverPort).bind(route)
 
-    println(s"Server now online. Please navigate to http://localhost:$serverPort")
+    logger.info(s"Server now online. Please navigate to http://localhost:$serverPort")
   }
 
   private def waitReply(id: String): Future[String] = {

@@ -12,8 +12,11 @@ import org.apache.kafka.common.errors.WakeupException
 import akka.actor.typed.{ActorSystem, SpawnProtocol}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.AskPattern._
+import com.typesafe.scalalogging.Logger
 
 object Consumer {
+  val logger = Logger(getClass.getName)
+
   def launchConsumer(host: String, poolIndex: Int): Unit = {
     implicit val system: ActorSystem[SpawnProtocol.Command] = Main.system
     implicit val executionContext: ExecutionContext = system.executionContext
@@ -37,7 +40,7 @@ object Consumer {
 
         Runtime.getRuntime.addShutdownHook(new Thread {
           override def run(): Unit = {
-            println("Consumer Shutdown Starting");
+            logger.warn("Consumer Shutdown Starting");
             consumer.wakeup()
 
             try mainThread.join
@@ -56,21 +59,23 @@ object Consumer {
               val receptionistFulture = Receptionist.get(system).ref.ask(Receptionist.Find(key))
 
               receptionistFulture.onComplete {
-                case Success(listing: Receptionist.Listing) =>
+                case Success(listing: Receptionist.Listing) => {
                   val instances = listing.serviceInstances(key)
                   instances.foreach { actor =>
                     actor ! RequestActor.Reply(record.value)
                   }
-                case Failure(ex) =>
-                  println("An error has occurred: " + ex.getMessage)
+                }
+                case Failure(ex) => {
+                  logger.error("Receptionist.Find: " + ex.getMessage)
+                }
               }
             }
           }
-        } catch  {
+        } catch {
           case _: WakeupException => Nil
         } finally {
           consumer.close();
-          println("Consumer closed");
+          logger.warn("Consumer closed");
         }
       }
     }

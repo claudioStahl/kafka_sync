@@ -14,8 +14,11 @@ import org.apache.kafka.clients.producer.ProducerConfig
 import com.goyeau.kafka.streams.circe.CirceSerdes._
 import Serdes._
 import io.circe._
+import com.typesafe.scalalogging.Logger
 
 object ReceiverStream {
+  val logger = Logger(getClass.getName)
+
   def buildStream(poolSize: Int): KafkaStreams = {
     val applicationName = sys.env("APPLICATION_NAME")
     val processorTopicOutput = sys.env("PROCESSOR_TOPIC_OUTPUT")
@@ -50,7 +53,7 @@ object ReceiverStream {
 
     val topology = builder.build()
 
-    println("ReceiverStream.topology", topology.describe())
+    logger.info("ReceiverStream " + topology.describe())
 
     val streams: KafkaStreams = new KafkaStreams(topology, config)
 

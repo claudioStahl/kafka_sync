@@ -12,13 +12,13 @@ lazy val commonSettings = Seq(
   libraryDependencies += "com.typesafe.akka" %% "akka-actor-typed" % AkkaVersion,
   libraryDependencies += "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
   libraryDependencies += "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
-//  libraryDependencies += "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
   libraryDependencies += "org.apache.kafka" % "kafka-clients" % "3.3.1",
   libraryDependencies += "org.apache.kafka" % "kafka-streams" % "3.3.1",
   libraryDependencies += "org.apache.kafka" %% "kafka-streams-scala" % "3.3.1",
   libraryDependencies += "com.loopfor.zookeeper" %% "zookeeper-client" % "1.6",
 
   libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.2.11",
+  libraryDependencies += "com.typesafe.scala-logging" %% "scala-logging" % "3.9.4",
 
   libraryDependencies += "io.circe" %% "circe-core" % circeVersion,
   libraryDependencies += "io.circe" %% "circe-generic" % circeVersion,
