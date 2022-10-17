@@ -4,8 +4,9 @@ import java.util.Properties
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
+import spray.json._
 
-object Producer extends JsonSupport {
+object Producer {
   def buildProducer(): KafkaProducer[String, String] = {
     val config = new Properties()
     config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, sys.env("KAFKA_SERVERS"))
@@ -30,11 +31,11 @@ object Producer extends JsonSupport {
     producer
   }
 
-  def produce(producer: KafkaProducer[String, String], host: String, topic: String, input: ValidationInput): Unit = {
+  def produce(producer: KafkaProducer[String, String], host: String, topic: String, id: String, input: JsObject): Unit = {
     val index = PoolControl.atomicIndex.get()
-    val inputWithMetadata = ValidationInputWithMetadata(input.id, input.amount, MessageMetadata(host, index))
-    val message = validationInputWithMetadataFormat.write(inputWithMetadata).compactPrint
-    val record = new ProducerRecord[String, String](topic, input.id, message)
+    val inputWithMetadata = JsObject(input.fields + ("metadata" -> JsObject("host" -> JsString(host), "poolIndex" -> JsNumber(index))))
+    val message = inputWithMetadata.compactPrint
+    val record = new ProducerRecord[String, String](topic, id, message)
     producer.send(record)
   }
 }

@@ -11,6 +11,7 @@ import org.apache.kafka.streams.scala.serialization.Serdes
 import org.apache.kafka.streams.KafkaStreams
 import org.apache.kafka.streams.scala.kstream.BranchedKStream
 import org.apache.kafka.clients.producer.ProducerConfig
+import spray.json._
 
 object ReceiverStream extends JsonSupport {
   import Serdes._
@@ -28,17 +29,24 @@ object ReceiverStream extends JsonSupport {
     config.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 1)
     config.put(ProducerConfig.LINGER_MS_CONFIG, 0)
 
-    implicit val validationResponseWithMetadata = new JSONSerde[ValidationResponseWithMetadata]
+    implicit val jsObjectSerde = new JSONSerde[JsObject]
 
     val builder: StreamsBuilder = new StreamsBuilder
 
-    val outputs: KStream[String, ValidationResponseWithMetadata] = builder.stream[String, ValidationResponseWithMetadata](processorTopicOutput)
-    val outputsBranched: BranchedKStream[String, ValidationResponseWithMetadata]  = outputs.split()
+    val outputs: KStream[String, JsObject] = builder.stream[String, JsObject](processorTopicOutput)
+    val outputsBranched: BranchedKStream[String, JsObject]  = outputs.split()
 
     (1 to poolSize).foreach { i =>
       outputsBranched.branch(
-        (k: String, v: ValidationResponseWithMetadata) => {
-          v.metadata.poolIndex == i
+        (k: String, v: JsObject) => {
+          v.getFields("metadata") match {
+            case Seq(JsObject(metadata)) =>
+              metadata.get("poolIndex") match {
+                case Some(JsNumber(poolIndex)) => poolIndex == i
+                case _ => false
+              }
+            case _ => false
+          }
         },
         Branched.withConsumer(ks => {
           ks.to(applicationName + "_responses_p" + i.toString)

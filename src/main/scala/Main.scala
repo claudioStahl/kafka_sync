@@ -45,30 +45,33 @@ object Main extends JsonSupport {
     val receiverStream = ReceiverStream.buildStream(poolSize)
     ProcessorStream.buildStream()
 
-    var d = JsObject(
-      "name" -> JsString("test")
-    )
-    println("json=", d)
-
     val route =
       path("validations") {
         post {
-          entity(as[ValidationInput]) { input =>
-            if (PoolControl.atomicIndex.get() != -1 && receiverStream.state() == State.RUNNING) {
-              Producer.produce(producer, host, processorTopicInput, input)
+          entity(as[JsObject]) { input =>
+            input.getFields("id") match {
+              case Seq(JsString(id)) => {
+                if (PoolControl.atomicIndex.get() != -1 && receiverStream.state() == State.RUNNING) {
+                  Producer.produce(producer, host, processorTopicInput, id, input)
 
-              onComplete(waitReply(input.id)) {
-                case Success(value) => {
-                  complete(HttpResponse(entity = HttpEntity(ContentTypes.`application/json`, value)))
-                }
-                case Failure(ex) => {
-                  val resp = JsObject("error" -> JsString(ex.getMessage))
+                  onComplete(waitReply(id)) {
+                    case Success(value) => {
+                      complete(HttpResponse(entity = HttpEntity(ContentTypes.`application/json`, value)))
+                    }
+                    case Failure(ex) => {
+                      val resp = JsObject("error" -> JsString(ex.getMessage))
+                      complete(StatusCodes.UnprocessableEntity, resp)
+                    }
+                  }
+                } else {
+                  val resp = JsObject("error" -> JsString("not_ready"))
                   complete(StatusCodes.UnprocessableEntity, resp)
                 }
               }
-            } else {
-              val resp = JsObject("error" -> JsString("not_ready"))
-              complete(StatusCodes.UnprocessableEntity, resp)
+              case _ => {
+                val resp = JsObject("error" -> JsString("no_id"))
+                complete(StatusCodes.UnprocessableEntity, resp)
+              }
             }
           }
         }

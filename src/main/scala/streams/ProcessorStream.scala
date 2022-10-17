@@ -10,6 +10,7 @@ import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.scala.serialization.Serdes
 import org.apache.kafka.streams.KafkaStreams
 import org.apache.kafka.clients.producer.ProducerConfig
+import spray.json._
 
 object ProcessorStream extends JsonSupport {
   import Serdes._
@@ -27,15 +28,19 @@ object ProcessorStream extends JsonSupport {
     config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, JSerdes.String.getClass)
     config.put(ProducerConfig.LINGER_MS_CONFIG, 0)
 
-    implicit val validationInputWithMetadata = new JSONSerde[ValidationInputWithMetadata]
-    implicit val validationResponseWithMetadata = new JSONSerde[ValidationResponseWithMetadata]
+    implicit val jsObjectSerde = new JSONSerde[JsObject]
 
     val builder: StreamsBuilder = new StreamsBuilder
 
-    val inputs: KStream[String, ValidationInputWithMetadata] = builder.stream[String, ValidationInputWithMetadata](processorTopicInput)
+    val inputs: KStream[String, JsObject] = builder.stream[String, JsObject](processorTopicInput)
 
-    val processedInputs: KStream[String, ValidationResponseWithMetadata] = inputs.mapValues(input => {
-      ValidationResponseWithMetadata(input.id, true, input.metadata)
+    val processedInputs: KStream[String, JsObject] = inputs.mapValues((key, value) => {
+      val metadata = value.fields.get("metadata").get
+      JsObject(
+        "id" -> JsString(key),
+        "is_fraud" -> JsBoolean(true),
+        "metadata" -> metadata
+      )
     })
 
     processedInputs.to(processorTopicOutput)
