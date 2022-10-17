@@ -12,8 +12,8 @@ import org.apache.kafka.streams.KafkaStreams
 import org.apache.kafka.streams.scala.kstream.BranchedKStream
 import org.apache.kafka.clients.producer.ProducerConfig
 import com.goyeau.kafka.streams.circe.CirceSerdes._
-import io.circe._
 import Serdes._
+import io.circe._
 
 object ReceiverStream {
   def buildStream(poolSize: Int): KafkaStreams = {

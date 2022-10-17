@@ -35,8 +35,6 @@ import io.circe.schema.Schema
 import CirceSupport._
 import cats.data.Validated.{Invalid, Valid}
 
-case class ErrorResponse(error: String, message: Option[String] = None)
-
 object Main {
   implicit val system: ActorSystem[SpawnProtocol.Command] = ActorSystem(MainActor(), "app")
   implicit val executionContext: ExecutionContext = system.executionContext

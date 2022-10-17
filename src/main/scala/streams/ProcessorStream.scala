@@ -11,9 +11,10 @@ import org.apache.kafka.streams.scala.serialization.Serdes
 import org.apache.kafka.streams.KafkaStreams
 import org.apache.kafka.clients.producer.ProducerConfig
 import com.goyeau.kafka.streams.circe.CirceSerdes._
-import io.circe._
-import io.circe.literal._
 import Serdes._
+import io.circe._
+import io.circe.syntax._
+import io.circe.generic.auto._
 
 object ProcessorStream {
   def buildStream(): Unit = {
@@ -34,8 +35,8 @@ object ProcessorStream {
     val inputs: KStream[String, Json] = builder.stream[String, Json](processorTopicInput)
 
     val processedInputs: KStream[String, Json] = inputs.mapValues((key, value) => {
-      val metadata = value.hcursor.get[Json]("metadata").toOption.get
-      json"""{"id": $key, "is_fraud": true, "metadata": $metadata}"""
+      val metadata = value.hcursor.get[InputMetadata]("metadata").toOption.get
+      ProcessorResponse(key, true, metadata).asJson
     })
 
     processedInputs.to(processorTopicOutput)

@@ -5,7 +5,8 @@ import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
 import io.circe._
-import io.circe.literal._
+import io.circe.syntax._
+import io.circe.generic.auto._
 
 object Producer {
   def buildProducer(): KafkaProducer[String, String] = {
@@ -34,7 +35,7 @@ object Producer {
 
   def produce(producer: KafkaProducer[String, String], host: String, topic: String, id: String, input: Json): Unit = {
     val index = PoolControl.atomicIndex.get()
-    val metadata = json"""{ "metadata": { "host": $host, "poolIndex": $index } }"""
+    val metadata = WrapperMetadata(InputMetadata(host, index)).asJson
     val inputWithMetadata = input.deepMerge(metadata)
     val message = inputWithMetadata.noSpaces
     val record = new ProducerRecord[String, String](topic, id, message)
