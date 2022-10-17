@@ -3,6 +3,7 @@ package sandbox_akka
 import java.util.concurrent.atomic.AtomicInteger
 import java.net.InetSocketAddress
 import com.loopfor.zookeeper._
+import com.typesafe.scalalogging.Logger
 
 object PoolControl {
   var atomicIndex = new AtomicInteger(-1)
@@ -10,18 +11,17 @@ object PoolControl {
   val rootDir = sys.env("ZOOKEEPER_ROOT_DIR")
   val poolDir = rootDir + "/pool"
   val lockDir = rootDir + "/_lock"
+  val logger = Logger(getClass.getName)
 
   def init(poolSize: Int, host: String): Unit = {
-    val inet = new InetSocketAddress("localhost", 2181)
-
     val config = Configuration {
       sys.env("ZOOKEEPER_SERVERS").split(",").map { item =>
         val Array(host, port) = item.split(":").map(_.trim)
         new InetSocketAddress(host, port.toInt)
       }
     } withWatcher { (event, session) =>
-      println("event=", event)
-      println("session=", session, session.state == ConnectedState)
+      logger.info("event: " + event)
+      logger.info("session: " + session)
     }
 
     val zk = Zookeeper(config)
@@ -81,7 +81,7 @@ object PoolControl {
     zk.sync.create(currentNode, null, Seq(acl), Ephemeral)
     atomicIndex.set(currentIndex)
 
-    println("currentIndex=", currentIndex)
+    logger.info("currentIndex: " + currentIndex)
 
     Consumer.launchConsumer(host, currentIndex)
   }
@@ -97,27 +97,23 @@ object PoolControl {
   }
 
   private def doExecWithLock(zk: Zookeeper, currentNode: String)(exec: (Zookeeper) => Unit): Unit = {
-    println("currentNode=", currentNode)
     val currentName = currentNode.split("/").last
     val currentNumber = currentName.toInt
     val lastName = "%010d".format(currentNumber - 1)
     val lastNode = lockDir + "/" + lastName
-    println("lastNode=", lastNode)
 
     val lockChildren = zk.sync.children(lockDir).sorted
-    println("lockChildren=", lockChildren)
 
     if (lockChildren.head == currentName) {
-      println("lockStatus=", true)
+      logger.info("receive lock")
 
       exec(zk)
       zk.sync.delete(currentNode, None)
 
     } else {
-      println("lockStatus=", false)
+      logger.info("waiting lock")
 
       val existLast = zk.sync watch { e =>
-        println("waitLock=", e)
         doExecWithLock(zk, currentNode)(exec)
       } exists (lastNode)
 
