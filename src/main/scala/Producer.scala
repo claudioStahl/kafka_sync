@@ -1,4 +1,4 @@
-package sandbox_akka
+package kafka_sync
 
 import java.util.Properties
 import org.apache.kafka.clients.producer.KafkaProducer

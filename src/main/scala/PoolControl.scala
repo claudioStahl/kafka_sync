@@ -1,4 +1,4 @@
-package sandbox_akka
+package kafka_sync
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.net.InetSocketAddress

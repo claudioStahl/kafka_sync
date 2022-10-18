@@ -1,4 +1,4 @@
-package sandbox_akka
+package kafka_sync
 
 import io.circe._
 import io.circe.parser._

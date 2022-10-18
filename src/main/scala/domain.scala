@@ -1,4 +1,4 @@
-package sandbox_akka
+package kafka_sync
 
 case class InputMetadata(host: String, poolIndex: Int)
 case class WrapperMetadata(metadata: InputMetadata)

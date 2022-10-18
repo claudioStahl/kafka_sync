@@ -1,4 +1,4 @@
-package sandbox_akka
+package kafka_sync
 
 import scala.util._
 import scala.concurrent._

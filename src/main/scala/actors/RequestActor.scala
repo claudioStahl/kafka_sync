@@ -1,4 +1,4 @@
-package sandbox_akka
+package kafka_sync
 
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}

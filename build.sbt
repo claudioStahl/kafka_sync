@@ -32,6 +32,5 @@ lazy val commonSettings = Seq(
 lazy val root = (project in file("."))
   .settings(
     commonSettings,
-    name := "sandbox_akka"
-//    idePackagePrefix := Some("claudiostahl")
+    name := "kafka_sync"
   )

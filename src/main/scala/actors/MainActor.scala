@@ -1,4 +1,4 @@
-package sandbox_akka
+package kafka_sync
 
 import akka.actor.typed.{Behavior, SpawnProtocol}
 import akka.actor.typed.scaladsl.Behaviors
