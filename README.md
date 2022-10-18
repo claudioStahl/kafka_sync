@@ -8,6 +8,7 @@ Technologies
 - Kafka Streams
 - Akka
 - Zookeeper
+- JSON Schema
 
 ## Commands
 
