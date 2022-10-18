@@ -1,6 +1,15 @@
+# KafkaSync
+
 A project to convert a async flow on Kafka to a sync http request.
 
-This project use the Kafka Streams and Akka.
+Technologies
+
+- Kafka 
+- Kafka Streams
+- Akka
+- Zookeeper
+
+## Commands
 
 Run K6:
 
@@ -8,7 +17,19 @@ Run K6:
 k6 run ./k6.js
 ```
 
-K6 output:
+Create topics:
+
+```sh
+./create_topics.sh
+```
+
+Delete topics:
+
+```sh
+./delete_topics.sh
+```
+
+## K6 output
 
 ```sh
 running (0m30.0s), 00/10 VUs, 96070 complete and 0 interrupted iterations
