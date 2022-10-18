@@ -17,7 +17,7 @@ import io.circe.syntax._
 import io.circe.generic.auto._
 import com.typesafe.scalalogging.Logger
 
-object ProcessorStream {
+object FakerProcessorStream {
   val logger = Logger(getClass.getName)
 
   def buildStream(): Unit = {
@@ -39,7 +39,7 @@ object ProcessorStream {
 
     val processedInputs: KStream[String, Json] = inputs.mapValues((key, value) => {
       val metadata = value.hcursor.get[InputMetadata]("metadata").toOption.get
-      ProcessorResponse(key, true, metadata).asJson
+      FakerProcessorResponse(key, true, metadata).asJson
     })
 
     processedInputs.to(processorTopicOutput)

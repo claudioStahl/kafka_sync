@@ -62,12 +62,14 @@ object Main {
     val jsonSchemaFilePath = sys.env("JSON_SCHEMA_FILE_PATH")
     val serverPort = sys.env("SERVER_PORT").toInt
     val poolSize = sys.env("POOL_SIZE").toInt
+    val enableFakerProcessor = sys.env("ENABLE_FAKER_PROCESSOR") == "true"
 
     val producer = Producer.buildProducer()
 
     PoolControl.init(poolSize, host)
     val receiverStream = ReceiverStream.buildStream(poolSize)
-    ProcessorStream.buildStream()
+
+    if (enableFakerProcessor) FakerProcessorStream.buildStream()
 
     val jsonSchemaRaw = Source.fromFile(jsonSchemaFilePath).getLines.mkString
     val jsonSchemaValue = parse(jsonSchemaRaw).toOption.get
