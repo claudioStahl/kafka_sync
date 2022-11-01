@@ -39,3 +39,12 @@ services:
       - 8080:8080
     environment:
       KAFKA_BROKERS: kafka:29092
+
+  zoonavigator:
+    image: elkozmon/zoonavigator:latest
+    container_name: global_zoonavigator
+    restart: unless-stopped
+    ports:
+      - 9000:9000  
+    environment:
+      HTTP_PORT: "9000"
