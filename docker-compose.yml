@@ -42,7 +42,7 @@ services:
 
   zoonavigator:
     image: elkozmon/zoonavigator:latest
-    container_name: global_zoonavigator
+    container_name: zoonavigator
     restart: unless-stopped
     ports:
       - 9000:9000  
